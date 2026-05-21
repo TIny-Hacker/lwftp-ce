@@ -2,12 +2,11 @@
 # Makefile Options
 # ----------------------------
 
-NAME = lwIP
-ICON = icon.png
-DESCRIPTION = lwIP Networking Stack
+NAME = lwFTP
+DESCRIPTION = CE FTP client with lwIP
 
-APP_NAME = lwIP
-APP_VERSION = 0
+APP_NAME = lwFTP
+APP_VERSION = 5.0.0.0000
 
 CFLAGS = -Wall -Wextra -Oz -I src/include
 CXXFLAGS = -Wall -Wextra -Oz -I src/include
