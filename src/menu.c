@@ -1,4 +1,5 @@
 #include "defines.h"
+#include "lwftp.h"
 #include "utility.h"
 
 #include <graphx.h>
@@ -37,6 +38,30 @@ static void menu_PrintAddress(uint8_t *addr, unsigned int x, uint8_t y) {
 }
 
 /**
+ * @brief Print a string and clip the beginning if it exceeds a specified width.
+ * 
+ * @param s String to print.
+ * @param x Top-left x coordinate.
+ * @param y Top-left y coordinate.
+ * @param width Maximum width.
+ */
+static void menu_ClipString(const char *s, unsigned int x, uint8_t y, unsigned int width) {
+    if (!s) {
+        return;
+    }
+
+    if (gfx_GetStringWidth(s) <= width) {
+        gfx_PrintStringXY(s, x, y);
+    } else {
+        gfx_SetClipRegion(x, y, x + width, y + 8);
+        gfx_SetTextConfig(gfx_text_clip);
+        gfx_PrintStringXY(s, x + width - gfx_GetStringWidth(s), y);
+        gfx_SetTextConfig(gfx_text_noclip);
+        gfx_SetClipRegion(0, 0, 319, 239);
+    }
+}
+
+/**
  * @brief Very simple text input routine. Could probably be improved later.
  * 
  * @param x Top-left x coordinate.
@@ -56,7 +81,8 @@ static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, ch
     memset(input, '\0', MAX_INPUT_LENGTH);
 
     gfx_SetColor(prefs.hlColor);
-    gfx_FillRectangle_NoClip(x, y, 108, 8);
+    gfx_FillRectangle_NoClip(x, y, width, 8);
+    gfx_BlitBuffer();
 
     while (!kb_IsDown(kb_KeyClear) && !(kb_IsDown(kb_Key2nd) && currentOffset > 0)) {
         kb_Scan();
@@ -74,23 +100,23 @@ static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, ch
             } else if (kb_IsDown(kb_KeyAlpha)) {
                 inputMode = inputMode == INPUT_LOWER ? INPUT_DEFAULT : inputMode + 1;
                 while (kb_AnyKey());
+            } else if (kb_IsDown(kb_KeyDel)) {
+                if (currentOffset) {
+                    input[--currentOffset] = '\0';
+                }
             } else if (currentOffset < MAX_INPUT_LENGTH - 1) {
                 if (!keyPressed) {
                     c = asm_util_GetCharFromKey(inputMode);
                 }
 
                 if (c >= ' ' && c <= '~') {
-                    input[currentOffset] = c;
-
-                    if (gfx_GetStringWidth(input) > width) {
-                        input[currentOffset] = '\0';
-                    } else {
-                        currentOffset++;
-                    }
+                    input[currentOffset++] = c;
                 }
             }
 
-            gfx_PrintStringXY(input, x, y);
+            gfx_SetColor(prefs.hlColor);
+            gfx_FillRectangle_NoClip(x, y, width, 8);
+            menu_ClipString(input, x, y, width);
             gfx_BlitBuffer();
 
             util_WaitBeforeKeypress(&clockOffset, &keyPressed);
@@ -98,13 +124,11 @@ static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, ch
     }
 
     if (kb_IsDown(kb_Key2nd)) {
+        while (kb_AnyKey());
         return 0;
     }
 
-    if (kb_IsDown(kb_KeyClear)) {
-        while (kb_AnyKey());
-    }
-
+    while (kb_AnyKey());
     return 1;
 }
 
@@ -261,8 +285,8 @@ int8_t menu_ServerConfig(uint8_t *server, char *user, char *pass) {
             gfx_PrintStringXY("User:", 75, 124);
             gfx_PrintStringXY("Pass:", 75, 137);
             menu_PrintAddress(server, 142, 111);
-            gfx_PrintStringXY(user, 142, 124);
-            gfx_PrintStringXY(pass, 142, 137);
+            menu_ClipString(user, 142, 124, 106);
+            menu_ClipString(pass, 142, 137, 106);
             gfx_BlitBuffer();
             util_WaitBeforeKeypress(&clockOffset, &keyPressed);
         }
@@ -271,4 +295,21 @@ int8_t menu_ServerConfig(uint8_t *server, char *user, char *pass) {
     return kb_IsDown(kb_KeyClear);
 }
 
+int8_t menu_DrawFiles(lwftp_session_t *s) {
+    gfx_FillScreen(prefs.fgColor);
+    gfx_SetColor(prefs.hlColor);
+    menu_PixelIndentRectangle(2, 2, 316, 15);
+    menu_PixelIndentRectangle(2, 223, 316, 15);
+    gfx_SetColor(prefs.bgColor);
+    menu_PixelIndentRectangle(2, 19, 156, 202);
+    menu_PixelIndentRectangle(161, 19, 156, 202);
+    gfx_PrintStringXY("Back", 16, 227);
+    gfx_PrintStringXY("Upload", 74, 227);
+    gfx_PrintStringXY("Delete", 138, 227);
+    gfx_PrintStringXY("Download", 194, 227);
+    gfx_PrintStringXY("Move", 272, 227);
+    menu_ClipString(s->remote_path, 6, 6, 308);
+    gfx_BlitBuffer();
 
+    return 0;
+}

@@ -308,6 +308,7 @@ int main(void) {
 
     while (!ftp_finished) {
         main_ServiceNetwork();
+        menu_DrawFiles(&s);
         kb_Scan();
 
         if (kb_IsDown(kb_KeyClear)) {
