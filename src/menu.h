@@ -39,7 +39,7 @@ int8_t menu_ServerConfig(uint8_t *server, char *user, char *pass);
  * @param s lwftp session struct.
  * @return int8_t 0 if success.
  */
-int8_t menu_DrawFiles(lwftp_session_t *s);
+int8_t menu_UpdateMain(lwftp_session_t *s);
 
 #ifdef __cplusplus
 }

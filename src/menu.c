@@ -20,6 +20,73 @@ static void menu_PixelIndentRectangle(unsigned int x, uint8_t y, unsigned int wi
 }
 
 /**
+ * @brief Draw a file icon and name.
+ * 
+ * @param name Name of the file to draw.
+ * @param type Type of the file to draw.
+ * @param x Top-left x coordinate.
+ * @param y Top-left y coordinate.
+ */
+static void menu_DrawFile(struct file_t *file, unsigned int x, uint8_t y) {
+    if (file->type == TYPE_UNKNOWN) {
+        return;
+    }
+
+    if (file->type == TYPE_DIR) {
+        gfx_SetColor(prefs.bgColor);
+        gfx_FillRectangle_NoClip(x + 1, y + 3, 8, 5);
+        gfx_SetColor(prefs.textColor);
+        gfx_HorizLine_NoClip(x, y + 2, 5);
+        gfx_Rectangle_NoClip(x, y + 2, 10, 7);
+    } else {
+        uint8_t erase = gfx_GetPixel(x, y);
+        gfx_SetColor(prefs.bgColor);
+        gfx_FillRectangle_NoClip(x + 2, y + 1, 6, 7);
+        gfx_SetColor(prefs.textColor);
+        gfx_Rectangle_NoClip(x + 1, y, 8, 9);
+        gfx_FillRectangle_NoClip(x + 5, y + 1, 3, 3);
+        gfx_SetColor(erase);
+        gfx_FillTriangle_NoClip(x + 6, y, x + 8, y, x + 8, y + 2);
+    }
+
+    gfx_PrintStringXY(file->name, x + 13, y + 1);
+
+    if (file->type == TYPE_PROG) {
+        gfx_PrintString(".8xp");
+    } else if (file->type == TYPE_APPVAR) {
+        gfx_PrintString(".8xv");
+    }
+}
+
+/**
+ * @brief Draw files in either the local or remote column.
+ * 
+ * @param remoteColumn True if drawing the remote column.
+ * @param start Index to begin drawing files at.
+ * @param selected Index of currently selected file.
+ */
+static void menu_DrawFiles(bool remoteColumn, unsigned int start, unsigned int selected) {
+    uint8_t x = remoteColumn ? 168 : 8;
+    uint8_t y = 26;
+    struct file_t *list = remoteColumn ? REMOTE_FILES : LOCAL_FILES;
+    struct file_t *end = remoteColumn ? REMOTE_FILES + MAX_REMOTE_FILES : LOCAL_FILES + MAX_LOCAL_FILES;
+
+    for (unsigned int i = 0; i < MAX_SHOWN_FILES; i++) {
+        if (&list[start + i] == end || list[start + i].type == TYPE_UNKNOWN) {
+            break;
+        }
+
+        if (start + i == selected) {
+            gfx_SetColor(prefs.hlColor);
+            menu_PixelIndentRectangle(x - 3, y - 3, 149, 15);
+        }
+
+        menu_DrawFile(&list[start + i], x, y);
+        y += 13;
+    }
+}
+
+/**
  * @brief Print out an address formatted X.X.X.X
  * 
  * @param addr 4-byte array to print.
@@ -46,10 +113,6 @@ static void menu_PrintAddress(uint8_t *addr, unsigned int x, uint8_t y) {
  * @param width Maximum width.
  */
 static void menu_ClipString(const char *s, unsigned int x, uint8_t y, unsigned int width) {
-    if (!s) {
-        return;
-    }
-
     if (gfx_GetStringWidth(s) <= width) {
         gfx_PrintStringXY(s, x, y);
     } else {
@@ -295,21 +358,44 @@ int8_t menu_ServerConfig(uint8_t *server, char *user, char *pass) {
     return kb_IsDown(kb_KeyClear);
 }
 
-int8_t menu_DrawFiles(lwftp_session_t *s) {
-    gfx_FillScreen(prefs.fgColor);
-    gfx_SetColor(prefs.hlColor);
-    menu_PixelIndentRectangle(2, 2, 316, 15);
-    menu_PixelIndentRectangle(2, 223, 316, 15);
-    gfx_SetColor(prefs.bgColor);
-    menu_PixelIndentRectangle(2, 19, 156, 202);
-    menu_PixelIndentRectangle(161, 19, 156, 202);
-    gfx_PrintStringXY("Back", 16, 227);
-    gfx_PrintStringXY("Upload", 74, 227);
-    gfx_PrintStringXY("Delete", 138, 227);
-    gfx_PrintStringXY("Download", 194, 227);
-    gfx_PrintStringXY("Move", 272, 227);
-    menu_ClipString(s->remote_path, 6, 6, 308);
-    gfx_BlitBuffer();
+int8_t menu_UpdateMain(lwftp_session_t *s) {
+    if (app.dirty == ALL_DIRTY) {
+        gfx_FillScreen(prefs.fgColor);
+    }
+
+    if (app.dirty & BUTTONS_DIRTY) {
+        gfx_SetColor(prefs.hlColor);
+        menu_PixelIndentRectangle(2, 223, 316, 15);
+        gfx_PrintStringXY("Back", 16, 227);
+        gfx_PrintStringXY("Upload", 74, 227);
+        gfx_PrintStringXY("Delete", 138, 227);
+        gfx_PrintStringXY("Download", 194, 227);
+        gfx_PrintStringXY("Move", 272, 227);
+    }
+
+    if (app.dirty & PATH_DIRTY) {
+        gfx_SetColor(prefs.hlColor);
+        menu_PixelIndentRectangle(2, 2, 316, 15);
+
+        if (s->remote_path) {
+            menu_ClipString(s->remote_path, 6, 6, 308);
+        }
+    }
+
+    if (app.dirty & REMOTE_DIRTY) {
+        gfx_SetColor(prefs.bgColor);
+        menu_PixelIndentRectangle(161, 19, 156, 202);
+    }
+
+    if (app.dirty & LOCAL_DIRTY) {
+        gfx_SetColor(prefs.bgColor);
+        menu_PixelIndentRectangle(2, 19, 156, 202);
+    }
+
+    if (app.dirty) {
+        gfx_BlitBuffer();
+        app.dirty = 0;
+    }
 
     return 0;
 }

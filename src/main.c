@@ -22,13 +22,15 @@
 static const char test_buf[] =
     "Sent by TI-84 Plus CE :)\r\n";
 
-static bool ftp_started;
-static bool ftp_finished;
-static int ftp_result = LWFTP_RESULT_INPROGRESS;
-static unsigned int tx_offset;
-static char rx_buf[sizeof(test_buf)];
-static unsigned int rx_offset;
-static bool rx_overflow;
+struct app_t app = {
+    .dirty = ALL_DIRTY,
+    .ftp_result = LWFTP_RESULT_INPROGRESS,
+    .selectedLocal = 0,
+    .selectedRemote = 0,
+    .startLocal = 0,
+    .startRemote = 0,
+    .remoteColumn = false,
+};
 
 struct preferences_t prefs = {
     .bgColor = 255,
@@ -308,7 +310,7 @@ int main(void) {
 
     while (!ftp_finished) {
         main_ServiceNetwork();
-        menu_DrawFiles(&s);
+        menu_UpdateMain(&s);
         kb_Scan();
 
         if (kb_IsDown(kb_KeyClear)) {
