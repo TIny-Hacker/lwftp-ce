@@ -4,11 +4,24 @@
 #include <graphx.h>
 #include <keypadc.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <usbdrvce.h>
+
+#include "lwip/timeouts.h"
+
+void util_ServiceNetwork(void) {
+    usb_HandleEvents();
+    sys_check_timeouts();
+}
 
 void util_WaitBeforeKeypress(clock_t *clockOffset, bool *keyPressed) {
     if (!(*keyPressed)) {
         while ((clock() - *clockOffset < CLOCKS_PER_SEC / 2.25) && kb_AnyKey()) {
+            if (app.connected) {
+                util_ServiceNetwork();
+            }
+
             kb_Scan();
         }
     }
@@ -60,4 +73,33 @@ void util_WriteConfig(void) {
     ti_Write(&prefs, sizeof(prefs), 1, slot);
     ti_SetArchiveStatus(true, slot);
     ti_Close(slot);
+}
+
+void util_GetLocalFiles(void) {
+    uint8_t type;
+    char *name;
+    void *vat = NULL;
+    unsigned int i = 0;
+    memset(LOCAL_FILES, 0, sizeof(struct file_t) * MAX_LOCAL_FILES);
+
+    while ((name = ti_DetectAny(&vat, NULL, &type))) {
+        if (*name == '!' || *name == '#') {
+            continue;
+        }
+
+        if (type == OS_TYPE_APPVAR) {
+            LOCAL_FILES[i].type = TYPE_APPVAR;
+        } else if (type == OS_TYPE_PROT_PRGM || type == OS_TYPE_PRGM) {
+            LOCAL_FILES[i].type = TYPE_PROG;
+        } else {
+            continue;
+        }
+
+        memcpy(LOCAL_FILES[i].name, name, sizeof(char) * 8);
+        if (LOCAL_FILES[i].name[0] < 'A') LOCAL_FILES[i].name[0] += 64; // Account for hidden files
+        i++;
+    }
+
+    app.total[0] = i;
+    app.dirty |= LOCAL_DIRTY;
 }

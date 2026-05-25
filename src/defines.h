@@ -49,20 +49,20 @@ struct preferences_t {
 
 struct app_t {
     uint8_t dirty;
-    unsigned int selectedLocal;
-    unsigned int selectedRemote;
-    unsigned int startLocal;
-    unsigned int startRemote;
     bool remoteColumn;
+    unsigned int start[2];
+    unsigned int selected[2];
+    unsigned int total[2];
 
-    bool ftp_started;
-    bool ftp_finished;
-    int ftp_result;
-    char *tx_buf;
-    unsigned int tx_offset;
-    char *rx_buf;
-    unsigned int rx_offset;
-    bool rx_overflow;
+    bool connected;
+    bool ftpStarted;
+    bool ftpFinished;
+    int ftpResult;
+    char *txBuf;
+    unsigned int txOffset;
+    char rxBuf[64]; // TODO set this up better
+    unsigned int rxOffset;
+    bool rxOverflow;
 };
 
 struct file_t {

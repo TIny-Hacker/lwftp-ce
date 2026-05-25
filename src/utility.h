@@ -9,6 +9,12 @@ extern "C" {
 #endif
 
 /**
+ * @brief Handle USB network events.
+ * 
+ */
+void util_ServiceNetwork(void);
+
+/**
  * @brief Waits before repeating a keypress.
  * 
  * @param clockOffset Clock offset for timer.
@@ -44,6 +50,12 @@ void util_ReadConfig(void);
  * 
  */
 void util_WriteConfig(void);
+
+/**
+ * @brief Scan all local AppVars and programs and save them to pixelShadow.
+ * 
+ */
+void util_GetLocalFiles(void);
 
 #ifdef __cplusplus
 }

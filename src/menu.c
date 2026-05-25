@@ -62,26 +62,24 @@ static void menu_DrawFile(struct file_t *file, unsigned int x, uint8_t y) {
  * @brief Draw files in either the local or remote column.
  * 
  * @param remoteColumn True if drawing the remote column.
- * @param start Index to begin drawing files at.
- * @param selected Index of currently selected file.
  */
-static void menu_DrawFiles(bool remoteColumn, unsigned int start, unsigned int selected) {
+static void menu_DrawFiles(bool remoteColumn) {
     uint8_t x = remoteColumn ? 168 : 8;
     uint8_t y = 26;
     struct file_t *list = remoteColumn ? REMOTE_FILES : LOCAL_FILES;
     struct file_t *end = remoteColumn ? REMOTE_FILES + MAX_REMOTE_FILES : LOCAL_FILES + MAX_LOCAL_FILES;
 
     for (unsigned int i = 0; i < MAX_SHOWN_FILES; i++) {
-        if (&list[start + i] == end || list[start + i].type == TYPE_UNKNOWN) {
+        if (&list[app.start[remoteColumn] + i] == end || list[app.start[remoteColumn] + i].type == TYPE_UNKNOWN) {
             break;
         }
 
-        if (start + i == selected) {
+        if (remoteColumn == app.remoteColumn && app.start[remoteColumn] + i == app.selected[remoteColumn]) {
             gfx_SetColor(prefs.hlColor);
             menu_PixelIndentRectangle(x - 3, y - 3, 149, 15);
         }
 
-        menu_DrawFile(&list[start + i], x, y);
+        menu_DrawFile(&list[app.start[remoteColumn] + i], x, y);
         y += 13;
     }
 }
@@ -390,6 +388,7 @@ int8_t menu_UpdateMain(lwftp_session_t *s) {
     if (app.dirty & LOCAL_DIRTY) {
         gfx_SetColor(prefs.bgColor);
         menu_PixelIndentRectangle(2, 19, 156, 202);
+        menu_DrawFiles(false);
     }
 
     if (app.dirty) {

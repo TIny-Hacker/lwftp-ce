@@ -19,17 +19,17 @@
 #include "lwip/netif.h"
 #include "lwip/timeouts.h"
 
-static const char test_buf[] =
+static const char testBuf[] =
     "Sent by TI-84 Plus CE :)\r\n";
 
 struct app_t app = {
     .dirty = ALL_DIRTY,
-    .ftp_result = LWFTP_RESULT_INPROGRESS,
-    .selectedLocal = 0,
-    .selectedRemote = 0,
-    .startLocal = 0,
-    .startRemote = 0,
+    .connected = false,
+    .ftpResult = LWFTP_RESULT_INPROGRESS,
     .remoteColumn = false,
+    .start = {0, 0},
+    .selected = {0, 0},
+    .total = {0, 0},
 };
 
 struct preferences_t prefs = {
@@ -51,14 +51,9 @@ static void delay(unsigned int ms) {
     }
 }
 
-static void main_ServiceNetwork(void) {
-    usb_HandleEvents();
-    sys_check_timeouts();
-}
-
 static bool main_WaitForIP(void) {
     for (unsigned int tick = 0; tick < IP_WAIT_TICKS; tick++) {
-        main_ServiceNetwork();
+        util_ServiceNetwork();
         kb_Scan();
 
         if (netif_default) {
@@ -131,29 +126,29 @@ static uint16_t ftp_DataSource(void *arg, const char **pptr, uint16_t maxlen) {
     (void)arg;
 
     if (pptr == NULL) {
-        tx_offset += maxlen;
+        app.txOffset += maxlen;
 
-        if (tx_offset > sizeof(test_buf) - 1u) {
-            tx_offset = sizeof(test_buf) - 1u;
+        if (app.txOffset > sizeof(testBuf) - 1u) {
+            app.txOffset = sizeof(testBuf) - 1u;
         }
 
         return 0;
     }
 
-    remaining = (unsigned int)(sizeof(test_buf) - 1u) - tx_offset;
+    remaining = (unsigned int)(sizeof(testBuf) - 1u) - app.txOffset;
     len = remaining;
 
     if (len > maxlen) {
         len = maxlen;
     }
 
-    *pptr = test_buf + tx_offset;
+    *pptr = testBuf + app.txOffset;
     return (uint16_t)len;
 }
 
 static uint16_t ftp_DataSink(void *arg, const char *ptr, uint16_t len) {
     unsigned int remaining;
-    unsigned int copy_len;
+    unsigned int copyLen;
 
     (void)arg;
 
@@ -161,17 +156,17 @@ static uint16_t ftp_DataSink(void *arg, const char *ptr, uint16_t len) {
         return 0;
     }
 
-    remaining = (unsigned int)sizeof(rx_buf) - rx_offset;
-    copy_len = len;
+    remaining = (unsigned int)sizeof(app.rxBuf) - app.rxOffset;
+    copyLen = len;
 
-    if (copy_len > remaining) {
-        copy_len = remaining;
-        rx_overflow = true;
+    if (copyLen > remaining) {
+        copyLen = remaining;
+        app.rxOverflow = true;
     }
 
-    if (copy_len > 0) {
-        memcpy(rx_buf + rx_offset, ptr, copy_len);
-        rx_offset += copy_len;
+    if (copyLen > 0) {
+        memcpy(app.rxBuf + app.rxOffset, ptr, copyLen);
+        app.rxOffset += copyLen;
     }
 
     return len;
@@ -185,7 +180,7 @@ static void ftp_RetrCallback(void *arg, int result) {
     }
 
     if (result == LWFTP_RESULT_OK) {
-        if (rx_overflow || rx_offset != sizeof(test_buf) - 1u || strcmp(rx_buf, test_buf) != 0) {
+        if (app.rxOverflow || app.rxOffset != sizeof(testBuf) - 1u || strcmp(app.rxBuf, testBuf) != 0) {
             menu_PrintMessage("RETR test failed");
             result = LWFTP_RESULT_ERR_LOCAL;
         } else {
@@ -193,8 +188,8 @@ static void ftp_RetrCallback(void *arg, int result) {
         }
     }
 
-    ftp_result = result;
-    ftp_finished = true;
+    app.ftpResult = result;
+    app.ftpFinished = true;
     s->done_fn = NULL;
     lwftp_close(s);
 }
@@ -208,27 +203,27 @@ static void ftp_StorCallback(void *arg, int result) {
     }
 
     if (result != LWFTP_RESULT_OK) {
-        ftp_result = result;
-        ftp_finished = true;
+        app.ftpResult = result;
+        app.ftpFinished = true;
         lwftp_close(s);
         return;
     }
 
     menu_PrintMessage("STOR test success");
-    memset(rx_buf, 0, sizeof(rx_buf));
-    rx_offset = 0;
-    rx_overflow = false;
+    memset(app.rxBuf, 0, sizeof(app.rxBuf));
+    app.rxOffset = 0;
+    app.rxOverflow = false;
 
     s->data_source = NULL;
     s->data_sink = ftp_DataSink;
     s->done_fn = ftp_RetrCallback;
-    s->remote_path = FTP_REMOTE_PATH;
+    s->remote_path = "/";
 
     err = lwftp_retrieve(s);
 
     if (err != LWFTP_RESULT_INPROGRESS) {
-        ftp_result = err;
-        ftp_finished = true;
+        app.ftpResult = err;
+        app.ftpFinished = true;
     }
 }
 
@@ -241,8 +236,8 @@ static void ftp_ConnectCallback(void *arg, int result) {
     }
 
     if (result != LWFTP_RESULT_LOGGED) {
-        ftp_result = result;
-        ftp_finished = true;
+        app.ftpResult = result;
+        app.ftpFinished = true;
         lwftp_close(s);
         return;
     }
@@ -252,12 +247,12 @@ static void ftp_ConnectCallback(void *arg, int result) {
     s->data_sink = NULL;
     s->data_source = ftp_DataSource;
     s->done_fn = ftp_StorCallback;
-    s->remote_path = FTP_REMOTE_PATH;
+    s->remote_path = "/";
 
     err = lwftp_store(s);
     if (err != LWFTP_RESULT_INPROGRESS) {
-        ftp_result = err;
-        ftp_finished = true;
+        app.ftpResult = err;
+        app.ftpFinished = true;
     }
 }
 
@@ -267,10 +262,14 @@ int main(void) {
     static char pass[MAX_INPUT_LENGTH];
     static uint8_t server[4] = {0, 0, 0, 0};
 
+    bool keyPressed = false;
+    clock_t clockOffset = clock();
+
     util_ReadConfig();
     gfx_Begin();
     gfx_SetDrawBuffer();
     gfx_SetTextFGColor(prefs.textColor);
+    util_GetLocalFiles();
     while (kb_AnyKey()); // Debounce
 
     if (menu_ClientConfig()) goto exit;
@@ -308,27 +307,63 @@ int main(void) {
         goto exit;
     }
 
-    while (!ftp_finished) {
-        main_ServiceNetwork();
-        menu_UpdateMain(&s);
+    app.connected = true;
+
+    while (!kb_IsDown(kb_KeyClear)) {
+        util_ServiceNetwork();
         kb_Scan();
 
-        if (kb_IsDown(kb_KeyClear)) {
-            ftp_result = LWFTP_RESULT_ERR_LOCAL;
-            ftp_finished = true;
-            lwftp_close(&s);
-            break;
+        if (!kb_AnyKey() && keyPressed) {
+            keyPressed = false;
+            clockOffset = clock();
         }
 
-        delay(2);
+        if (kb_Data[7] && (!keyPressed || clock() - clockOffset > CLOCKS_PER_SEC / 16)) {
+            if (kb_IsDown(kb_KeyLeft) || kb_IsDown(kb_KeyRight)) {
+                app.remoteColumn = !app.remoteColumn;
+                app.dirty |= LOCAL_DIRTY | REMOTE_DIRTY;
+            } else if (kb_IsDown(kb_KeyUp)) {
+                if (app.selected[app.remoteColumn]) {
+                    app.selected[app.remoteColumn] -= 1;
+
+                    if (app.selected[app.remoteColumn] < app.start[app.remoteColumn]) {
+                        app.start[app.remoteColumn] -= 1;
+                    }
+                } else {
+                    app.selected[app.remoteColumn] = app.total[app.remoteColumn] - 1;
+
+                    if (app.total[app.remoteColumn] > MAX_SHOWN_FILES) {
+                        app.start[app.remoteColumn] = app.total[app.remoteColumn] - MAX_SHOWN_FILES;
+                    }
+                }
+
+                app.dirty |= app.remoteColumn ? REMOTE_DIRTY : LOCAL_DIRTY;
+            } else if (kb_IsDown(kb_KeyDown)) {
+                if (app.selected[app.remoteColumn] != app.total[app.remoteColumn] - 1) {
+                    app.selected[app.remoteColumn] += 1;
+
+                    if (app.selected[app.remoteColumn] > app.start[app.remoteColumn] + MAX_SHOWN_FILES - 1) {
+                        app.start[app.remoteColumn] += 1;
+                    }
+                } else {
+                    app.selected[app.remoteColumn] = 0;
+                    app.start[app.remoteColumn] = 0;
+                }
+
+                app.dirty |= app.remoteColumn ? REMOTE_DIRTY : LOCAL_DIRTY;
+            }
+
+            menu_UpdateMain(&s);
+            util_WaitBeforeKeypress(&clockOffset, &keyPressed);
+        }
     }
 
     while (s.control_state != LWFTP_CLOSED) {
-        main_ServiceNetwork();
+        util_ServiceNetwork();
         delay(2);
     }
 
-    if (ftp_started) lwftp_close(&s);
+    if (app.ftpStarted) lwftp_close(&s);
 
 exit:
     while (!kb_AnyKey());
@@ -336,5 +371,5 @@ exit:
     util_WriteConfig();
     usb_Cleanup();
 
-    return ftp_result;
+    return app.ftpResult;
 }
