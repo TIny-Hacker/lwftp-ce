@@ -72,10 +72,47 @@ uint16_t ftp_ListDataSink(void *arg, const char *ptr, uint16_t len) {
         }
     }
 
+    app.dirty |= REMOTE_DIRTY;
     return len;
 }
 
 void ftp_ListCallback(void *arg, int result) {
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        return;
+    }
+
+    util_GetDir((lwftp_session_t *)arg);
+}
+
+uint16_t ftp_PwdDataSink(void *arg, const char *ptr, uint16_t len) {
+    (void)arg;
+
+    if (ptr == NULL) {
+        return 0;
+    }
+
+    const char *start = memchr(ptr, '"', len);
+    if (start) {
+        start++;
+        const char *end = memchr(start, '"', len - (start - ptr));
+        if (end) {
+            unsigned int copylen = end - start > RX_BUF_SIZE ? RX_BUF_SIZE : end - start;
+            memcpy(app.path, start, copylen);
+            app.path[copylen] = '\0';
+            app.rxOffset = copylen;
+        }
+    }
+
+    app.dirty |= PATH_DIRTY;
+    return len;
+}
+
+void ftp_PwdCallback(void *arg, int result) {
     (void)arg;
 
     if (result == LWFTP_RESULT_INPROGRESS) {
@@ -87,5 +124,19 @@ void ftp_ListCallback(void *arg, int result) {
         return;
     }
 
-    app.dirty |= REMOTE_DIRTY;
+    app.busy = false;
+}
+
+void ftp_CwdCallback(void *arg, int result) {
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        return;
+    }
+
+    app.dirty |= PATH_DIRTY;
+    util_GetRemoteFiles((lwftp_session_t *)arg);
 }

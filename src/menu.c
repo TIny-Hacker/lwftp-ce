@@ -375,8 +375,8 @@ int8_t menu_UpdateMain(lwftp_session_t *s) {
         menu_PixelIndentRectangle(2, 2, 316, 15);
 
         if (s->remote_path) {
-            gfx_PrintStringXY("~/", 6, 6);
-            menu_ClipString(s->remote_path, 22, 6, 308);
+            // gfx_PrintStringXY("~/", 6, 6);
+            menu_ClipString(app.path, 6, 6, 308);
         }
     }
 

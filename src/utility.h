@@ -64,6 +64,20 @@ void util_GetLocalFiles(void);
  */
 void util_GetRemoteFiles(lwftp_session_t *s);
 
+/**
+ * @brief Begin getting the current working directory and storing it to app.path.
+ * 
+ * @param s lwftp session.
+ */
+void util_GetDir(lwftp_session_t *s);
+
+/**
+ * @brief Change the current working directory.
+ * 
+ * @param s lwftp session.
+ */
+void util_ChangeDir(lwftp_session_t *s);
+
 #ifdef __cplusplus
 }
 #endif

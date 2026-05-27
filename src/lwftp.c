@@ -421,6 +421,32 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
         s->control_state = LWFTP_CMDEND;
       }
       break;
+    case LWFTP_CWD_SENT:
+      if (response>0) {
+        if (response==250) {
+          result = LWFTP_RESULT_OK;
+        } else if (response==550) {
+          result = LWFTP_RESULT_ERR_FILENAME;
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp: Failed to change directory '%s'\n", s->remote_path));
+        } else {
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 250, received %d\n",response));
+        }
+        s->control_state = LWFTP_CMDEND;
+      }
+      break;
+    case LWFTP_PWD_SENT:
+      if (response>0) {
+        if (response==257) {
+          if (s->data_sink) {
+            s->data_sink(s->handle, p->payload, p->len);
+          }
+          result = LWFTP_RESULT_OK;
+        } else {
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 257, received %d\n",response));
+        }
+        s->control_state = LWFTP_CMDEND;
+      }
+      break;
     case LWFTP_RNFR_SENT:
       if (response>0) {
         if (response==350) {
@@ -590,6 +616,40 @@ static void lwftp_send_RMD(void *arg)
     lwftp_send_msg(s, s->remote_path, strlen(s->remote_path));
     lwftp_send_msg(s, PTRNLEN("\r\n"));
     s->control_state = LWFTP_RMD_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Send CWD to change remote directory
+ * @param pointer to lwftp session
+ */
+static void lwftp_send_CWD(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("CWD "));
+    lwftp_send_msg(s, s->remote_path, strlen(s->remote_path));
+    lwftp_send_msg(s, PTRNLEN("\r\n"));
+    s->control_state = LWFTP_CWD_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Send PWD to print remote directory
+ * @param pointer to lwftp session
+ */
+static void lwftp_send_PWD(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("PWD\r\n"));
+    s->control_state = LWFTP_PWD_SENT;
   } else {
     LOG_ERROR("Unexpected condition");
     if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
@@ -922,6 +982,67 @@ err_t lwftp_remove_dir(lwftp_session_t *s)
     retval = LWFTP_RESULT_INPROGRESS;
   } else {
     LOG_ERROR("cannot start RMD (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** Change remote directory
+ * @param Session structure
+ */
+err_t lwftp_change_dir(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       !s->remote_path ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Initiate command
+  error = tcpip_callback(lwftp_send_CWD, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start CWD (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** Print remote directory
+ * @param Session structure
+ */
+err_t lwftp_print_dir(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Initiate command
+  error = tcpip_callback(lwftp_send_PWD, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start PWD (%s)",lwip_strerr(error));
     retval = LWFTP_RESULT_ERR_INTERNAL;
   }
 

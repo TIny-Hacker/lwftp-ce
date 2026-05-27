@@ -54,6 +54,7 @@ struct app_t {
     unsigned int start[2];
     unsigned int selected[2];
     unsigned int total[2];
+    uint8_t dir;
 
     bool connected;
     bool ftpStarted;
@@ -62,6 +63,7 @@ struct app_t {
     char *txBuf;
     unsigned int txOffset;
     char rxBuf[RX_BUF_SIZE + 2];
+    char path[RX_BUF_SIZE + 2];
     unsigned int rxOffset;
 };
 

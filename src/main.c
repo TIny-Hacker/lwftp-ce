@@ -28,6 +28,9 @@ struct app_t app = {
     .start = {0, 0},
     .selected = {0, 0},
     .total = {0, 0},
+    .path = "",
+    .dir = 0,
+    .busy = false,
 };
 
 struct preferences_t prefs = {
@@ -161,7 +164,7 @@ int main(void) {
     s.user = user;
     s.pass = pass;
     s.handle = &s;
-    s.remote_path = "";
+    s.remote_path = app.path;
     s.done_fn = ftp_ConnectCallback;
 
     menu_PrintMessage("Connecting to FTP...");
@@ -171,16 +174,28 @@ int main(void) {
         goto exit;
     }
 
+    while (!app.ftpStarted && app.ftpResult == LWFTP_RESULT_INPROGRESS) {
+        util_ServiceNetwork();
+    }
+
+    if (!app.ftpStarted) {
+        goto exit;
+    }
+
     while (!kb_IsDown(kb_KeyClear)) {
         util_ServiceNetwork();
         kb_Scan();
+
+        if (app.dirty) {
+            menu_UpdateMain(&s);
+        }
 
         if (!kb_AnyKey() && keyPressed) {
             keyPressed = false;
             clockOffset = clock();
         }
 
-        if (kb_Data[7] && (!keyPressed || clock() - clockOffset > CLOCKS_PER_SEC / 16)) {
+        if ((kb_Data[7] || kb_Data[1]) && (!keyPressed || clock() - clockOffset > CLOCKS_PER_SEC / 16)) {
             if (kb_IsDown(kb_KeyLeft) || kb_IsDown(kb_KeyRight)) {
                 app.remoteColumn = !app.remoteColumn;
                 app.dirty |= LOCAL_DIRTY | REMOTE_DIRTY;
@@ -215,8 +230,20 @@ int main(void) {
                 app.dirty |= app.remoteColumn ? REMOTE_DIRTY : LOCAL_DIRTY;
             }
 
-            if (app.ftpStarted) {
-                // L'other stuff
+            if (app.ftpStarted && !app.busy) {
+                if (kb_IsDown(kb_Key2nd) && REMOTE_FILES[app.selected[app.remoteColumn]].type == TYPE_DIR && RX_BUF_SIZE - strlen(app.path) > 8) {
+                    char *insert = app.path + strlen(app.path);
+                    *insert = '/';
+                    memcpy(insert + 1, REMOTE_FILES[app.selected[app.remoteColumn]].name, 9);
+                    util_ChangeDir(&s);
+                    app.dir++;
+                    while (kb_AnyKey());
+                } else if (kb_IsDown(kb_KeyYequ) && app.dir) {
+                    *strrchr(app.path, '/') = '\0';
+                    util_ChangeDir(&s);
+                    app.dir--;
+                    while (kb_AnyKey());
+                }
             }
 
             menu_UpdateMain(&s);
@@ -224,9 +251,10 @@ int main(void) {
         }
     }
 
-    if (app.ftpStarted) lwftp_close(&s);
+    lwftp_close(&s);
+    clockOffset = clock();
 
-    while (s.control_state != LWFTP_CLOSED) {
+    while (s.control_state != LWFTP_CLOSED && clock() - clockOffset < CLOCKS_PER_SEC) {
         util_ServiceNetwork();
         delay(2);
     }

@@ -13,6 +13,12 @@ uint16_t ftp_ListDataSink(void *arg, const char *ptr, uint16_t len);
 
 void ftp_ListCallback(void *arg, int result);
 
+uint16_t ftp_PwdDataSink(void *arg, const char *ptr, uint16_t len);
+
+void ftp_PwdCallback(void *arg, int result);
+
+void ftp_CwdCallback(void *arg, int result);
+
 #ifdef __cplusplus
 }
 #endif

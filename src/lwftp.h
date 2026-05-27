@@ -76,6 +76,8 @@ typedef enum  {
   LWFTP_MLSD_SENT,
   LWFTP_DELE_SENT,
   LWFTP_RMD_SENT,
+  LWFTP_CWD_SENT,
+  LWFTP_PWD_SENT,
   LWFTP_RNFR_SENT,
   LWFTP_RNTO_SENT,
   LWFTP_CMDEND,
@@ -110,6 +112,8 @@ err_t lwftp_retrieve(lwftp_session_t *s);
 err_t lwftp_mlsd(lwftp_session_t *s);
 err_t lwftp_delete(lwftp_session_t *s);
 err_t lwftp_remove_dir(lwftp_session_t *s);
+err_t lwftp_change_dir(lwftp_session_t *s);
+err_t lwftp_print_dir(lwftp_session_t *s);
 err_t lwftp_rename(lwftp_session_t *s);
 void  lwftp_close(lwftp_session_t *s);
 

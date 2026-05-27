@@ -106,6 +106,8 @@ void util_GetLocalFiles(void) {
 }
 
 void util_GetRemoteFiles(lwftp_session_t *s) {
+    app.busy = true;
+
     s->data_sink = ftp_ListDataSink;
     s->done_fn = ftp_ListCallback;
 
@@ -114,4 +116,27 @@ void util_GetRemoteFiles(lwftp_session_t *s) {
     memset(REMOTE_FILES, 0, sizeof(struct file_t) * MAX_REMOTE_FILES);
 
     lwftp_mlsd(s);
+}
+
+void util_GetDir(lwftp_session_t *s) {
+    app.busy = true;
+
+    s->data_sink = ftp_PwdDataSink;
+    s->done_fn = ftp_PwdCallback;
+
+    app.rxOffset = 0;
+    memset(app.path, 0, RX_BUF_SIZE + 2);
+
+    lwftp_print_dir(s);
+}
+
+void util_ChangeDir(lwftp_session_t *s) {
+    app.busy = true;
+
+    app.selected[1] = 0;
+    app.start[1] = 0;
+    s->remote_path = app.path;
+    s->done_fn = ftp_CwdCallback;
+
+    lwftp_change_dir(s);
 }
