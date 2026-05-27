@@ -135,11 +135,14 @@ static err_t lwftp_data_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     tcp_recved(tpcb, p->tot_len);
     pbuf_free(p);
   } else {
-    // NULL pbuf shall lead to close the pcb. Close is postponed after
-    // the session state machine updates. No need to close right here.
-    // Instead we kindly tell data sink we are done
+    // NULL pbuf shall lead to close the pcb.
     if (s->data_sink) {
       s->data_sink(s->handle, NULL, 0);
+    }
+
+    if (s->data_pcb) {
+      lwftp_pcb_close(s->data_pcb);
+      s->data_pcb = NULL;
     }
   }
   return ERR_OK;

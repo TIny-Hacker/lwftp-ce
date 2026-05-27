@@ -16,6 +16,7 @@ void ftp_ConnectCallback(void *arg, int result) {
     if (result != LWFTP_RESULT_LOGGED) {
         app.ftpResult = result;
         lwftp_close(s);
+        app.busy = false;
         return;
     }
 
@@ -83,6 +84,7 @@ void ftp_ListCallback(void *arg, int result) {
 
     if (result != LWFTP_RESULT_OK) {
         app.ftpResult = result;
+        app.busy = false;
         return;
     }
 
@@ -121,6 +123,7 @@ void ftp_PwdCallback(void *arg, int result) {
 
     if (result != LWFTP_RESULT_OK) {
         app.ftpResult = result;
+        app.busy = false;
         return;
     }
 
@@ -134,6 +137,7 @@ void ftp_CwdCallback(void *arg, int result) {
 
     if (result != LWFTP_RESULT_OK) {
         app.ftpResult = result;
+        app.busy = false;
         return;
     }
 
