@@ -73,6 +73,12 @@ typedef enum  {
   LWFTP_QUIT,
   LWFTP_QUIT_SENT,
   LWFTP_CLOSING,
+  LWFTP_MLSD_SENT,
+  LWFTP_DELE_SENT,
+  LWFTP_RMD_SENT,
+  LWFTP_RNFR_SENT,
+  LWFTP_RNTO_SENT,
+  LWFTP_CMDEND,
 } lwftp_state_t;
 
 /** LWFTP session structure */
@@ -81,6 +87,7 @@ typedef struct {
   ip_addr_t     server_ip;
   u16_t         server_port;
   const char    *remote_path;
+  const char    *remote_new_path;
   const char    *user;
   const char    *pass;
   void          *handle;
@@ -100,6 +107,10 @@ typedef struct {
 err_t lwftp_connect(lwftp_session_t *s);
 err_t lwftp_store(lwftp_session_t *s);
 err_t lwftp_retrieve(lwftp_session_t *s);
+err_t lwftp_mlsd(lwftp_session_t *s);
+err_t lwftp_delete(lwftp_session_t *s);
+err_t lwftp_remove_dir(lwftp_session_t *s);
+err_t lwftp_rename(lwftp_session_t *s);
 void  lwftp_close(lwftp_session_t *s);
 
 #ifdef __cplusplus

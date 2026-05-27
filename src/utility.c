@@ -1,4 +1,5 @@
 #include "defines.h"
+#include "ftp.h"
 
 #include <fileioc.h>
 #include <graphx.h>
@@ -102,4 +103,15 @@ void util_GetLocalFiles(void) {
 
     app.total[0] = i;
     app.dirty |= LOCAL_DIRTY;
+}
+
+void util_GetRemoteFiles(lwftp_session_t *s) {
+    s->data_sink = ftp_ListDataSink;
+    s->done_fn = ftp_ListCallback;
+
+    app.rxOffset = 0;
+    app.total[1] = 0;
+    memset(REMOTE_FILES, 0, sizeof(struct file_t) * MAX_REMOTE_FILES);
+
+    lwftp_mlsd(s);
 }

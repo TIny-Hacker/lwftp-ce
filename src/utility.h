@@ -57,6 +57,13 @@ void util_WriteConfig(void);
  */
 void util_GetLocalFiles(void);
 
+/**
+ * @brief Begin scanning files in the current remote directory.
+ * 
+ * @param s lwftp session.
+ */
+void util_GetRemoteFiles(lwftp_session_t *s);
+
 #ifdef __cplusplus
 }
 #endif

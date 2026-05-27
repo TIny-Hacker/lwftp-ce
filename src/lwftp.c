@@ -356,6 +356,9 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
             case LWFTP_RETR_SENT:
               lwftp_send_msg(s, PTRNLEN("RETR "));
               break;
+            case LWFTP_MLSD_SENT:
+              lwftp_send_msg(s, PTRNLEN("MLSD "));
+              break;
             default:
               LOG_ERROR("Unexpected internal state");
               s->target_state = LWFTP_QUIT;
@@ -394,6 +397,57 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
         }
       }
       break;
+    case LWFTP_MLSD_SENT:
+      if (response>0) {
+        if (response==150) {
+          s->control_state = LWFTP_XFERING;
+        } else {
+          s->control_state = LWFTP_DATAEND;
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 150, received %d\n",response));
+        }
+      }
+      break;
+    case LWFTP_DELE_SENT:
+    case LWFTP_RMD_SENT:
+      if (response>0) {
+        if (response==250) {
+          result = LWFTP_RESULT_OK;
+        } else if (response==550) {
+          result = LWFTP_RESULT_ERR_FILENAME;
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp: Failed to delete '%s'\n", s->remote_path));
+        } else {
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 250, received %d\n",response));
+        }
+        s->control_state = LWFTP_CMDEND;
+      }
+      break;
+    case LWFTP_RNFR_SENT:
+      if (response>0) {
+        if (response==350) {
+          lwftp_send_msg(s, PTRNLEN("RNTO "));
+          lwftp_send_msg(s, s->remote_new_path, strlen(s->remote_new_path));
+          lwftp_send_msg(s, PTRNLEN("\r\n"));
+          s->control_state = LWFTP_RNTO_SENT;
+        } else if (response==550) {
+          result = LWFTP_RESULT_ERR_FILENAME;
+          s->control_state = LWFTP_CMDEND;
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp: Failed to rename '%s'\n", s->remote_path));
+        } else {
+          s->control_state = LWFTP_CMDEND;
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 350, received %d\n",response));
+        }
+      }
+      break;
+    case LWFTP_RNTO_SENT:
+      if (response>0) {
+        if (response==250) {
+          result = LWFTP_RESULT_OK;
+        } else {
+          LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:expected 250, received %d\n",response));
+        }
+        s->control_state = LWFTP_CMDEND;
+      }
+      break;
     case LWFTP_XFERING:
       if (response>0) {
         if (response==226) {
@@ -407,6 +461,9 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
       break;
     case LWFTP_DATAEND:
       LOG_TRACE("forced end of data session");
+      break;
+    case LWFTP_CMDEND:
+      LOG_TRACE("forced end of command");
       break;
     case LWFTP_QUIT_SENT:
       if (response>0) {
@@ -433,6 +490,12 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
     case LWFTP_DATAEND:
       s->control_state = LWFTP_LOGGED;
       lwftp_data_close(s, result);
+      break;
+    case LWFTP_CMDEND:
+      s->control_state = LWFTP_LOGGED;
+      if ( s->done_fn ) {
+        s->done_fn(s->handle, result);
+      }
       break;
     case LWFTP_QUIT:
       lwftp_send_msg(s, PTRNLEN("QUIT\r\n"));
@@ -474,6 +537,77 @@ static void lwftp_start_STOR(void *arg)
     lwftp_send_msg(s, PTRNLEN("TYPE I\r\n"));
     s->control_state = LWFTP_TYPE_SENT;
     s->target_state = LWFTP_STOR_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Start a MLSD data session
+ * @param pointer to lwftp session
+ */
+static void lwftp_start_MLSD(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("TYPE I\r\n"));
+    s->control_state = LWFTP_TYPE_SENT;
+    s->target_state = LWFTP_MLSD_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Send DELE to delete a remote file
+ * @param pointer to lwftp session
+ */
+static void lwftp_send_DELE(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("DELE "));
+    lwftp_send_msg(s, s->remote_path, strlen(s->remote_path));
+    lwftp_send_msg(s, PTRNLEN("\r\n"));
+    s->control_state = LWFTP_DELE_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Send RMD to delete a remote directory
+ * @param pointer to lwftp session
+ */
+static void lwftp_send_RMD(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("RMD "));
+    lwftp_send_msg(s, s->remote_path, strlen(s->remote_path));
+    lwftp_send_msg(s, PTRNLEN("\r\n"));
+    s->control_state = LWFTP_RMD_SENT;
+  } else {
+    LOG_ERROR("Unexpected condition");
+    if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
+  }
+}
+
+/** Send RNFR to rename a remote file
+ * @param pointer to lwftp session
+ */
+static void lwftp_send_RNFR(void *arg)
+{
+  lwftp_session_t *s = (lwftp_session_t*)arg;
+
+  if ( s->control_state == LWFTP_LOGGED ) {
+    lwftp_send_msg(s, PTRNLEN("RNFR "));
+    lwftp_send_msg(s, s->remote_path, strlen(s->remote_path));
+    lwftp_send_msg(s, PTRNLEN("\r\n"));
+    s->control_state = LWFTP_RNFR_SENT;
   } else {
     LOG_ERROR("Unexpected condition");
     if (s->done_fn) s->done_fn(s->handle, LWFTP_RESULT_ERR_INTERNAL);
@@ -688,6 +822,138 @@ err_t lwftp_store(lwftp_session_t *s)
     retval = LWFTP_RESULT_INPROGRESS;
   } else {
     LOG_ERROR("cannot start STOR (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** List a remote directory
+ * @param Session structure
+ */
+err_t lwftp_mlsd(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       !s->remote_path ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Get data pcb
+  s->data_pcb = tcp_new();
+  if (!s->data_pcb) {
+    LWIP_DEBUGF(LWFTP_SERIOUS, ("lwftp:cannot alloc data_pcb (low memory?)\n"));
+    retval = LWFTP_RESULT_ERR_MEMORY;
+    goto exit;
+  }
+  // Initiate transfer
+  error = tcpip_callback(lwftp_start_MLSD, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start MLSD (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** Delete a remote file
+ * @param Session structure
+ */
+err_t lwftp_delete(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       !s->remote_path ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Initiate command
+  error = tcpip_callback(lwftp_send_DELE, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start DELE (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** Delete a remote directory
+ * @param Session structure
+ */
+err_t lwftp_remove_dir(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       !s->remote_path ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Initiate command
+  error = tcpip_callback(lwftp_send_RMD, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start RMD (%s)",lwip_strerr(error));
+    retval = LWFTP_RESULT_ERR_INTERNAL;
+  }
+
+exit:
+  if (s->done_fn) s->done_fn(s->handle, retval);
+  return retval;
+}
+
+/** Rename a remote file
+ * @param Session structure
+ */
+err_t lwftp_rename(lwftp_session_t *s)
+{
+  err_t error;
+  enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;
+
+  // Check user supplied data
+  if ( (s->control_state!=LWFTP_LOGGED) ||
+       !s->remote_path ||
+       !s->remote_new_path ||
+       s->data_pcb )
+  {
+    LWIP_DEBUGF(LWFTP_WARNING, ("lwftp:invalid session data\n"));
+    retval = LWFTP_RESULT_ERR_ARGUMENT;
+    goto exit;
+  }
+  // Initiate command
+  error = tcpip_callback(lwftp_send_RNFR, s);
+  if ( error == ERR_OK ) {
+    retval = LWFTP_RESULT_INPROGRESS;
+  } else {
+    LOG_ERROR("cannot start RNFR (%s)",lwip_strerr(error));
     retval = LWFTP_RESULT_ERR_INTERNAL;
   }
 

@@ -36,8 +36,8 @@ static void menu_DrawFile(struct file_t *file, unsigned int x, uint8_t y) {
         gfx_SetColor(prefs.bgColor);
         gfx_FillRectangle_NoClip(x + 1, y + 3, 8, 5);
         gfx_SetColor(prefs.textColor);
-        gfx_HorizLine_NoClip(x, y + 2, 5);
-        gfx_Rectangle_NoClip(x, y + 2, 10, 7);
+        gfx_HorizLine_NoClip(x, y + 1, 5);
+        gfx_Rectangle_NoClip(x, y + 2, 10, 6);
     } else {
         uint8_t erase = gfx_GetPixel(x, y);
         gfx_SetColor(prefs.bgColor);
@@ -139,7 +139,7 @@ static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, ch
 
     clock_t clockOffset = clock();
 
-    memset(input, '\0', MAX_INPUT_LENGTH);
+    memset(input, '\0', INPUT_BUF_SIZE);
 
     gfx_SetColor(prefs.hlColor);
     gfx_FillRectangle_NoClip(x, y, width, 8);
@@ -165,7 +165,7 @@ static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, ch
                 if (currentOffset) {
                     input[--currentOffset] = '\0';
                 }
-            } else if (currentOffset < MAX_INPUT_LENGTH - 1) {
+            } else if (currentOffset < INPUT_BUF_SIZE - 1) {
                 if (!keyPressed) {
                     c = asm_util_GetCharFromKey(inputMode);
                 }
@@ -203,7 +203,6 @@ void menu_PrintMessage(char *message) {
     menu_PixelIndentRectangle(160 - mWidth / 2 - 4, 112, mWidth + 8, 15);
     gfx_PrintStringXY(message, 160 - mWidth / 2, 116);
     gfx_SetDrawBuffer();
-    while (kb_AnyKey());
 }
 
 int8_t menu_ClientConfig(void) {
@@ -235,7 +234,7 @@ int8_t menu_ClientConfig(void) {
                 option = option < 2 ? option + 1 : 0;
             } else if (kb_IsDown(kb_Key2nd)) {
                 while (kb_AnyKey());
-                char input[MAX_INPUT_LENGTH];
+                char input[INPUT_BUF_SIZE];
                 uint8_t addr[4];
 
                 if (menu_StringInput(142, 111 + option * 13, 106, input)) {
@@ -310,7 +309,7 @@ int8_t menu_ServerConfig(uint8_t *server, char *user, char *pass) {
                 option = option < 2 ? option + 1 : 0;
             } else if (kb_IsDown(kb_Key2nd)) {
                 while (kb_AnyKey());
-                char input[MAX_INPUT_LENGTH];
+                char input[INPUT_BUF_SIZE];
                 uint8_t addr[4];
 
                 if (menu_StringInput(142, 111 + option * 13, 106, input)) {
@@ -376,13 +375,15 @@ int8_t menu_UpdateMain(lwftp_session_t *s) {
         menu_PixelIndentRectangle(2, 2, 316, 15);
 
         if (s->remote_path) {
-            menu_ClipString(s->remote_path, 6, 6, 308);
+            gfx_PrintStringXY("~/", 6, 6);
+            menu_ClipString(s->remote_path, 22, 6, 308);
         }
     }
 
     if (app.dirty & REMOTE_DIRTY) {
         gfx_SetColor(prefs.bgColor);
         menu_PixelIndentRectangle(161, 19, 156, 202);
+        menu_DrawFiles(true);
     }
 
     if (app.dirty & LOCAL_DIRTY) {

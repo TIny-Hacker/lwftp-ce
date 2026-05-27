@@ -14,7 +14,8 @@ extern "C" {
 
 #define IP_WAIT_TICKS       3000
 
-#define MAX_INPUT_LENGTH    32
+#define INPUT_BUF_SIZE      32
+#define RX_BUF_SIZE         255
 
 #define INPUT_DEFAULT       0
 #define INPUT_UPPER         1
@@ -56,13 +57,12 @@ struct app_t {
 
     bool connected;
     bool ftpStarted;
-    bool ftpFinished;
+    bool busy;
     int ftpResult;
     char *txBuf;
     unsigned int txOffset;
-    char rxBuf[64]; // TODO set this up better
+    char rxBuf[RX_BUF_SIZE + 2];
     unsigned int rxOffset;
-    bool rxOverflow;
 };
 
 struct file_t {

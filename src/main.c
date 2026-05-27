@@ -1,4 +1,5 @@
 #include "defines.h"
+#include "ftp.h"
 #include "menu.h"
 #include "utility.h"
 
@@ -18,9 +19,6 @@
 #include "lwip/ip4_addr.h"
 #include "lwip/netif.h"
 #include "lwip/timeouts.h"
-
-static const char testBuf[] =
-    "Sent by TI-84 Plus CE :)\r\n";
 
 struct app_t app = {
     .dirty = ALL_DIRTY,
@@ -119,147 +117,10 @@ static bool main_StartLwIP(void) {
     return true;
 }
 
-static uint16_t ftp_DataSource(void *arg, const char **pptr, uint16_t maxlen) {
-    unsigned int remaining;
-    unsigned int len;
-
-    (void)arg;
-
-    if (pptr == NULL) {
-        app.txOffset += maxlen;
-
-        if (app.txOffset > sizeof(testBuf) - 1u) {
-            app.txOffset = sizeof(testBuf) - 1u;
-        }
-
-        return 0;
-    }
-
-    remaining = (unsigned int)(sizeof(testBuf) - 1u) - app.txOffset;
-    len = remaining;
-
-    if (len > maxlen) {
-        len = maxlen;
-    }
-
-    *pptr = testBuf + app.txOffset;
-    return (uint16_t)len;
-}
-
-static uint16_t ftp_DataSink(void *arg, const char *ptr, uint16_t len) {
-    unsigned int remaining;
-    unsigned int copyLen;
-
-    (void)arg;
-
-    if (ptr == NULL) {
-        return 0;
-    }
-
-    remaining = (unsigned int)sizeof(app.rxBuf) - app.rxOffset;
-    copyLen = len;
-
-    if (copyLen > remaining) {
-        copyLen = remaining;
-        app.rxOverflow = true;
-    }
-
-    if (copyLen > 0) {
-        memcpy(app.rxBuf + app.rxOffset, ptr, copyLen);
-        app.rxOffset += copyLen;
-    }
-
-    return len;
-}
-
-static void ftp_RetrCallback(void *arg, int result) {
-    lwftp_session_t *s = (lwftp_session_t *)arg;
-
-    if (result == LWFTP_RESULT_INPROGRESS) {
-        return;
-    }
-
-    if (result == LWFTP_RESULT_OK) {
-        if (app.rxOverflow || app.rxOffset != sizeof(testBuf) - 1u || strcmp(app.rxBuf, testBuf) != 0) {
-            menu_PrintMessage("RETR test failed");
-            result = LWFTP_RESULT_ERR_LOCAL;
-        } else {
-            menu_PrintMessage("RETR test success");
-        }
-    }
-
-    app.ftpResult = result;
-    app.ftpFinished = true;
-    s->done_fn = NULL;
-    lwftp_close(s);
-}
-
-static void ftp_StorCallback(void *arg, int result) {
-    lwftp_session_t *s = (lwftp_session_t *)arg;
-    err_t err;
-
-    if (result == LWFTP_RESULT_INPROGRESS) {
-        return;
-    }
-
-    if (result != LWFTP_RESULT_OK) {
-        app.ftpResult = result;
-        app.ftpFinished = true;
-        lwftp_close(s);
-        return;
-    }
-
-    menu_PrintMessage("STOR test success");
-    memset(app.rxBuf, 0, sizeof(app.rxBuf));
-    app.rxOffset = 0;
-    app.rxOverflow = false;
-
-    s->data_source = NULL;
-    s->data_sink = ftp_DataSink;
-    s->done_fn = ftp_RetrCallback;
-    s->remote_path = "/";
-
-    err = lwftp_retrieve(s);
-
-    if (err != LWFTP_RESULT_INPROGRESS) {
-        app.ftpResult = err;
-        app.ftpFinished = true;
-    }
-}
-
-static void ftp_ConnectCallback(void *arg, int result) {
-    lwftp_session_t *s = (lwftp_session_t *)arg;
-    err_t err;
-
-    if (result == LWFTP_RESULT_INPROGRESS) {
-        return;
-    }
-
-    if (result != LWFTP_RESULT_LOGGED) {
-        app.ftpResult = result;
-        app.ftpFinished = true;
-        lwftp_close(s);
-        return;
-    }
-
-    menu_PrintMessage("Logged in");
-
-    s->data_sink = NULL;
-    s->data_source = ftp_DataSource;
-    s->done_fn = ftp_StorCallback;
-    s->remote_path = "/";
-
-    err = lwftp_store(s);
-    if (err != LWFTP_RESULT_INPROGRESS) {
-        app.ftpResult = err;
-        app.ftpFinished = true;
-    }
-}
-
 int main(void) {
     static lwftp_session_t s;
-    static char user[MAX_INPUT_LENGTH];
-    static char pass[MAX_INPUT_LENGTH];
+    static char user[INPUT_BUF_SIZE];
+    static char pass[INPUT_BUF_SIZE];
     static uint8_t server[4] = {0, 0, 0, 0};
 
     bool keyPressed = false;
@@ -292,12 +153,15 @@ int main(void) {
         goto exit;
     }
 
+    app.connected = true;
+
     memset(&s, 0, sizeof(s));
     IP_ADDR4(&s.server_ip, server[0], server[1], server[2], server[3]);
     s.server_port = 21;
     s.user = user;
     s.pass = pass;
     s.handle = &s;
+    s.remote_path = "";
     s.done_fn = ftp_ConnectCallback;
 
     menu_PrintMessage("Connecting to FTP...");
@@ -306,8 +170,6 @@ int main(void) {
         menu_PrintMessage("Connection failed");
         goto exit;
     }
-
-    app.connected = true;
 
     while (!kb_IsDown(kb_KeyClear)) {
         util_ServiceNetwork();
@@ -353,20 +215,23 @@ int main(void) {
                 app.dirty |= app.remoteColumn ? REMOTE_DIRTY : LOCAL_DIRTY;
             }
 
+            if (app.ftpStarted) {
+                // L'other stuff
+            }
+
             menu_UpdateMain(&s);
             util_WaitBeforeKeypress(&clockOffset, &keyPressed);
         }
     }
+
+    if (app.ftpStarted) lwftp_close(&s);
 
     while (s.control_state != LWFTP_CLOSED) {
         util_ServiceNetwork();
         delay(2);
     }
 
-    if (app.ftpStarted) lwftp_close(&s);
-
 exit:
-    while (!kb_AnyKey());
     gfx_End();
     util_WriteConfig();
     usb_Cleanup();
