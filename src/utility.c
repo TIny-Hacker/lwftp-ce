@@ -1,5 +1,6 @@
 #include "defines.h"
 #include "ftp.h"
+#include "menu.h"
 
 #include <fileioc.h>
 #include <graphx.h>
@@ -139,4 +140,74 @@ void util_ChangeDir(lwftp_session_t *s) {
     s->done_fn = ftp_CwdCallback;
 
     lwftp_change_dir(s);
+}
+
+void util_DeleteFile(lwftp_session_t *s) {
+    if (!app.remoteColumn) {
+        uint8_t type = LOCAL_FILES[app.selected[0]].type == TYPE_APPVAR ? OS_TYPE_APPVAR : OS_TYPE_PRGM;
+        ti_DeleteVar(LOCAL_FILES[app.selected[0]].name, type);
+        util_GetLocalFiles();
+    } else {
+        if (REMOTE_FILES[app.selected[1]].type == TYPE_DIR) {
+            return;
+        }
+
+        app.busy = true;
+
+        char *insert = app.path + strlen(app.path);
+        *insert = '/';
+        memcpy(insert + 1, REMOTE_FILES[app.selected[1]].name, 9);
+        insert = app.path + strlen(app.path);
+        strcpy(insert, ".8x");
+        *(insert + 3) = (REMOTE_FILES[app.selected[1]].type == TYPE_APPVAR) ? 'v' : 'p';
+        *(insert + 4) = '\0';
+        s->remote_path = app.path;
+        s->done_fn = ftp_DelCallback;
+
+        lwftp_delete(s);
+    }
+
+    app.total[app.remoteColumn]--;
+
+    if (app.total[app.remoteColumn] && app.selected[app.remoteColumn] == app.total[app.remoteColumn]) {
+        app.selected[app.remoteColumn]--;
+    }
+}
+
+void util_MoveFile(lwftp_session_t *s) {
+    if (!app.remoteColumn || REMOTE_FILES[app.selected[1]].type == TYPE_DIR) {
+        return;
+    }
+
+    char *insert = app.path + strlen(app.path);
+    *insert = '/';
+    memcpy(insert + 1, REMOTE_FILES[app.selected[1]].name, 9);
+    insert = app.path + strlen(app.path);
+    strcpy(insert, ".8x");
+    *(insert + 3) = (REMOTE_FILES[app.selected[1]].type == TYPE_APPVAR) ? 'v' : 'p';
+    *(insert + 4) = '\0';
+    s->remote_path = app.path;
+    static char input[INPUT_BUF_SIZE * 2];
+    memset(input, 0, INPUT_BUF_SIZE * 2);
+    menu_StringInput(6, 6, 308, input);
+
+    if (*input == '\0') {
+        return;
+    }
+
+    insert = input + strlen(input);
+
+    if (*(insert - 1) == '/') {
+        memcpy(insert, REMOTE_FILES[app.selected[1]].name, 9);
+        insert = input + strlen(input);
+        strcpy(insert, ".8x");
+        *(insert + 3) = (REMOTE_FILES[app.selected[1]].type == TYPE_APPVAR) ? 'v' : 'p';
+        *(insert + 4) = '\0';
+    }
+
+    s->remote_new_path = input;
+    s->done_fn = ftp_MoveCallback;
+
+    app.busy = true;
+    lwftp_move(s);
 }

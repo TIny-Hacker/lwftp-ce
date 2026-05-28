@@ -123,6 +123,7 @@ static err_t lwftp_send_next_data(lwftp_session_t *s)
 static err_t lwftp_data_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 {
   lwftp_session_t *s = (lwftp_session_t*)arg;
+  (void)err;
   if (p) {
     if (s->data_sink) {
       struct pbuf *q;
@@ -156,6 +157,7 @@ static err_t lwftp_data_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
 static err_t lwftp_data_sent(void *arg, struct tcp_pcb *tpcb, u16_t len)
 {
   lwftp_session_t *s = (lwftp_session_t*)arg;
+  (void)tpcb;
 
   if ( s->data_source ) {
     s->data_source(s->handle, NULL, len);
@@ -189,6 +191,7 @@ static void lwftp_data_err(void *arg, err_t err)
 static err_t lwftp_data_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
   lwftp_session_t *s = (lwftp_session_t*)arg;
+  (void)tpcb;
 
   if ( err == ERR_OK ) {
     LWIP_DEBUGF(LWFTP_STATE, ("lwftp:connected for data to server\n"));
@@ -293,6 +296,7 @@ static void lwftp_control_process(lwftp_session_t *s, struct tcp_pcb *tpcb, stru
 {
   u16_t response = 0;
   int result = LWFTP_RESULT_ERR_SRVR_RESP;
+  (void)tpcb;
 
   // Try to get response number
   if (p) {
@@ -723,6 +727,8 @@ static err_t lwftp_control_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
  */
 static err_t lwftp_control_sent(void *arg, struct tcp_pcb *tpcb, u16_t len)
 {
+  (void)arg;
+  (void)tpcb;
   LWIP_DEBUGF(LWFTP_TRACE, ("lwftp:successfully sent %d bytes\n",len));
   return ERR_OK;
 }
@@ -758,6 +764,7 @@ static void lwftp_control_err(void *arg, err_t err)
 static err_t lwftp_control_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
   lwftp_session_t *s = (lwftp_session_t*)arg;
+  (void)tpcb;
 
   if ( err == ERR_OK ) {
     LWIP_DEBUGF(LWFTP_STATE, ("lwftp:connected to server\n"));
@@ -1054,10 +1061,10 @@ exit:
   return retval;
 }
 
-/** Rename a remote file
+/** Move or rename a remote file
  * @param Session structure
  */
-err_t lwftp_rename(lwftp_session_t *s)
+err_t lwftp_move(lwftp_session_t *s)
 {
   err_t error;
   enum lwftp_results retval = LWFTP_RESULT_ERR_UNKNOWN;

@@ -19,6 +19,10 @@ void ftp_PwdCallback(void *arg, int result);
 
 void ftp_CwdCallback(void *arg, int result);
 
+void ftp_DelCallback(void *arg, int result);
+
+void ftp_MoveCallback(void *arg, int result);
+
 #ifdef __cplusplus
 }
 #endif

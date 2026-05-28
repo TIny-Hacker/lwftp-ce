@@ -144,3 +144,40 @@ void ftp_CwdCallback(void *arg, int result) {
     app.dirty |= PATH_DIRTY;
     util_GetRemoteFiles((lwftp_session_t *)arg);
 }
+
+void ftp_DelCallback(void *arg, int result) {
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        app.busy = false;
+        return;
+    }
+
+    *strrchr(app.path, '/') = '\0';
+    util_GetRemoteFiles((lwftp_session_t *)arg);
+}
+
+void ftp_MoveCallback(void *arg, int result) {
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        app.busy = false;
+        return;
+    }
+
+    *strrchr(app.path, '/') = '\0';
+
+    app.total[app.remoteColumn]--;
+
+    if (app.total[app.remoteColumn] && app.selected[app.remoteColumn] == app.total[app.remoteColumn]) {
+        app.selected[app.remoteColumn]--;
+    }
+
+    util_GetRemoteFiles((lwftp_session_t *)arg);
+}

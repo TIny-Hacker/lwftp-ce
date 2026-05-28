@@ -122,16 +122,7 @@ static void menu_ClipString(const char *s, unsigned int x, uint8_t y, unsigned i
     }
 }
 
-/**
- * @brief Very simple text input routine. Could probably be improved later.
- * 
- * @param x Top-left x coordinate.
- * @param y Top-left y coordinate.
- * @param stringLength Maximum input width in pixels.
- * @param input Input buffer.
- * @return int8_t 0 if successful.
- */
-static int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, char *input) {
+int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, char *input) {
     bool keyPressed = false;
     uint8_t currentOffset = 0;
     uint8_t inputMode = INPUT_DEFAULT;

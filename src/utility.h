@@ -78,6 +78,20 @@ void util_GetDir(lwftp_session_t *s);
  */
 void util_ChangeDir(lwftp_session_t *s);
 
+/**
+ * @brief Delete the currently selected file.
+ * 
+ * @param s lwftp session.
+ */
+void util_DeleteFile(lwftp_session_t *s);
+
+/**
+ * @brief Move the currently selected file.
+ * 
+ * @param s lwftp session.
+ */
+void util_MoveFile(lwftp_session_t *s);
+
 #ifdef __cplusplus
 }
 #endif

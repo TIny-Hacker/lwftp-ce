@@ -114,7 +114,7 @@ err_t lwftp_delete(lwftp_session_t *s);
 err_t lwftp_remove_dir(lwftp_session_t *s);
 err_t lwftp_change_dir(lwftp_session_t *s);
 err_t lwftp_print_dir(lwftp_session_t *s);
-err_t lwftp_rename(lwftp_session_t *s);
+err_t lwftp_move(lwftp_session_t *s);
 void  lwftp_close(lwftp_session_t *s);
 
 #ifdef __cplusplus
