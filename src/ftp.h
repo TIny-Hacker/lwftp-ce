@@ -23,6 +23,10 @@ void ftp_DelCallback(void *arg, int result);
 
 void ftp_MoveCallback(void *arg, int result);
 
+uint16_t ftp_StorDataSource(void *arg, const char **pptr, uint16_t maxlen);
+
+void ftp_StorCallback(void *arg, int result);
+
 #ifdef __cplusplus
 }
 #endif

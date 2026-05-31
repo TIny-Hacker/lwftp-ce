@@ -243,6 +243,9 @@ int main(void) {
                     util_ChangeDir(&s);
                     app.dir--;
                     while (kb_AnyKey());
+                } else if (kb_IsDown(kb_KeyWindow)) {
+                    util_UploadFile(&s);
+                    while (kb_AnyKey());
                 } else if (kb_IsDown(kb_KeyZoom)) {
                     util_DeleteFile(&s);
                     while (kb_AnyKey());

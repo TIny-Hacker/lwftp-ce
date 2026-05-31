@@ -1,6 +1,7 @@
 #include "defines.h"
 #include "ftp.h"
 #include "menu.h"
+#include "utility.h"
 
 #include <fileioc.h>
 #include <graphx.h>
@@ -114,6 +115,7 @@ void util_GetRemoteFiles(lwftp_session_t *s) {
 
     app.rxOffset = 0;
     app.total[1] = 0;
+    memset(app.rxBuf, 0, sizeof(app.rxBuf));
     memset(REMOTE_FILES, 0, sizeof(struct file_t) * MAX_REMOTE_FILES);
 
     lwftp_mlsd(s);
@@ -210,4 +212,91 @@ void util_MoveFile(lwftp_session_t *s) {
 
     app.busy = true;
     lwftp_move(s);
+}
+
+void util_UploadFile(lwftp_session_t *s) {
+    if (app.remoteColumn) {
+        return;
+    }
+
+    menu_PrintMessage("Uploading file...");
+
+    char *insert = app.path + strlen(app.path);
+    *insert = '/';
+    memcpy(insert + 1, LOCAL_FILES[app.selected[0]].name, 9);
+    insert = app.path + strlen(app.path);
+    strcpy(insert, ".8x");
+    *(insert + 3) = (LOCAL_FILES[app.selected[0]].type == TYPE_APPVAR) ? 'v' : 'p';
+    *(insert + 4) = '\0';
+    s->remote_path = app.path;
+
+    const char header[] = {'*', '*', 'T', 'I', '8', '3', 'F', '*', 0x1A, 0x0A, 0x00};
+    const char *comment = "Uploaded by lwFTP CE";
+    uint8_t *buf = FILE_BUFFER;
+
+    memset(buf, 0, 65535);
+    memcpy(buf, header, 11);
+    buf += 11;
+    memcpy(buf, comment, 21);
+    buf += 42;
+    uint8_t type = LOCAL_FILES[app.selected[0]].type == TYPE_APPVAR ? OS_TYPE_APPVAR : OS_TYPE_PRGM;
+    uint8_t slot = ti_OpenVar(LOCAL_FILES[app.selected[0]].name, "r", type);
+    type = *(uint8_t *)ti_GetVATPtr(slot);
+    uint16_t size = ti_GetSize(slot);
+    *(uint16_t *)buf = size + 19;
+    buf += 2;
+    *(uint16_t *)buf = 0xD;
+    buf += 2;
+    *(uint16_t *)buf = size + 2;
+    buf += 2;
+    *(uint8_t *)buf = type;
+    buf++;
+    memcpy(buf, LOCAL_FILES[app.selected[0]].name, 8);
+    buf += 9; // Name + version byte
+    if (ti_IsArchived(slot)) {
+        *(uint8_t *)buf = 0x80;
+    }
+    buf++;
+    *(uint16_t *)buf = size + 2;
+    buf += 2;
+    memcpy(buf, ti_GetDataPtr(slot) - 2, 2 + size); // variable entry + data
+    ti_Close(slot);
+    *(uint16_t *)(buf + 2 + size) = util_ComputeChecksum(FILE_BUFFER + 11 + 42 + 2, 17 + size);
+    app.txSize = 11 + 42 + 2 + 17 + size + 4; // Header + comment + size + variable entry + data + checksum
+    app.txOffset = 0;
+    app.busy = true;
+
+    s->data_source = ftp_StorDataSource;
+    s->done_fn = ftp_StorCallback;
+
+    lwftp_store(s);
+
+    while (app.busy && !kb_IsDown(kb_KeyClear)) {
+        kb_Scan();
+        util_ServiceNetwork();
+    }
+
+    app.dirty = ALL_DIRTY;
+}
+
+void util_DownloadFile(lwftp_session_t *s) {
+    menu_PrintMessage("Downloading file...");
+    gfx_BlitBuffer();
+
+    while (app.busy && !kb_IsDown(kb_KeyClear)) {
+        kb_Scan();
+        util_ServiceNetwork();
+    }
+
+    gfx_BlitScreen();
+}
+
+uint16_t util_ComputeChecksum(uint8_t *data, unsigned int size) {
+    uint16_t sum = 0;
+
+    for (unsigned int i = 0; i < size; i++) {
+        sum += data[i];
+    }
+
+    return sum;
 }

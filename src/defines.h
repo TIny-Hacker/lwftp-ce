@@ -38,6 +38,8 @@ extern "C" {
 #define MAX_REMOTE_FILES    ((8400 / sizeof(struct file_t)) - MAX_LOCAL_FILES)
 #define REMOTE_FILES        (LOCAL_FILES + (sizeof(struct file_t) * MAX_LOCAL_FILES))
 
+#define FILE_BUFFER         ((uint8_t *)0xD52C00)
+
 struct preferences_t {
     uint8_t bgColor;
     uint8_t fgColor;
@@ -60,8 +62,8 @@ struct app_t {
     bool ftpStarted;
     bool busy;
     int ftpResult;
-    char *txBuf;
     unsigned int txOffset;
+    unsigned int txSize;
     char rxBuf[RX_BUF_SIZE + 2];
     char path[RX_BUF_SIZE + 2];
     unsigned int rxOffset;

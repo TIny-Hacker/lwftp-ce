@@ -6,6 +6,43 @@
 
 #include <string.h>
 
+static void ftp_AddRemoteFile(void) {
+    char *name = strchr(app.rxBuf, ' ');
+    char *type = strstr(app.rxBuf, "type=");
+
+    if (!name || !type || app.total[1] >= MAX_REMOTE_FILES) {
+        return;
+    }
+
+    name++;
+    type += 5;
+
+    REMOTE_FILES[app.total[1]].type = TYPE_UNKNOWN;
+
+    if (!strncmp(type, "dir", 3)) {
+        REMOTE_FILES[app.total[1]].type = TYPE_DIR;
+    } else {
+        size_t name_len = strlen(name);
+
+        if (name_len >= 4 && !strncmp(name + name_len - 4, ".8x", 3)) {
+            if (name[name_len - 1] == 'p') {
+                REMOTE_FILES[app.total[1]].type = TYPE_PROG;
+            } else if (name[name_len - 1] == 'v') {
+                REMOTE_FILES[app.total[1]].type = TYPE_APPVAR;
+            }
+        }
+    }
+
+    if (REMOTE_FILES[app.total[1]].type != TYPE_UNKNOWN) {
+        for (uint8_t i = 0; i < 8 && name[i] != '\0'; i++) {
+            if (REMOTE_FILES[app.total[1]].type != TYPE_DIR && name[i] == '.') break;
+            REMOTE_FILES[app.total[1]].name[i] = name[i];
+        }
+
+        app.total[1]++;
+    }
+}
+
 void ftp_ConnectCallback(void *arg, int result) {
     lwftp_session_t *s = (lwftp_session_t *)arg;
 
@@ -33,41 +70,19 @@ uint16_t ftp_ListDataSink(void *arg, const char *ptr, uint16_t len) {
     }
 
     while (len) {
-        app.rxBuf[app.rxOffset] = *(ptr++);
+        char c = *(ptr++);
         len--;
 
-        if (*ptr == '\n') {
-            app.rxBuf[app.rxOffset] = '\0'; // Overwrites \r
-            char *name = strchr(app.rxBuf, ' ') + 1;
-            char *type = strstr(app.rxBuf, "type") + 5;
-
-            if (*type == 'd') {
-                REMOTE_FILES[app.total[1]].type = TYPE_DIR;
-            } else {
-                uint8_t len = strlen(app.rxBuf);
-                if (!strncmp(&(app.rxBuf[len - 4]), ".8x", 3)) {
-                    if (app.rxBuf[len - 1] == 'p') {
-                        REMOTE_FILES[app.total[1]].type = TYPE_PROG;
-                    } else if (app.rxBuf[len - 1] == 'v') {
-                        REMOTE_FILES[app.total[1]].type = TYPE_APPVAR;
-                    }
-                }
+        if (c == '\n') {
+            if (app.rxOffset && app.rxBuf[app.rxOffset - 1] == '\r') {
+                app.rxOffset--;
             }
 
-            if (REMOTE_FILES[app.total[1]].type != TYPE_UNKNOWN) {
-                for (uint8_t i = 0; i < 8 && name[i] != '\0'; i++) {
-                    if (*type != 'd' && name[i] == '.') break;
-                    REMOTE_FILES[app.total[1]].name[i] = name[i];
-                }
-
-                app.total[1]++;
-            }
-
+            app.rxBuf[app.rxOffset] = '\0';
+            ftp_AddRemoteFile();
             app.rxOffset = 0;
-            ptr++; // Skip newline
-            len--;
-        } else if (app.rxOffset != RX_BUF_SIZE) {
-            app.rxOffset++;
+        } else if (app.rxOffset < RX_BUF_SIZE) {
+            app.rxBuf[app.rxOffset++] = c;
         } else {
             break;
         }
@@ -179,5 +194,45 @@ void ftp_MoveCallback(void *arg, int result) {
         app.selected[app.remoteColumn]--;
     }
 
+    util_GetRemoteFiles((lwftp_session_t *)arg);
+}
+
+uint16_t ftp_StorDataSource(void *arg, const char **pptr, uint16_t maxlen) {
+    (void)arg;
+
+    if (pptr == NULL) {
+        app.txOffset += maxlen;
+    }
+
+    if (app.txOffset > app.txSize) {
+        app.txOffset = app.txSize;
+    }
+
+    if (pptr == NULL || maxlen == 0 || app.txOffset == app.txSize) {
+        return 0;
+    }
+
+    unsigned int len = app.txSize - app.txOffset;
+
+    if (len > maxlen) {
+        len = maxlen;
+    }
+
+    *pptr = (const char *)(FILE_BUFFER + app.txOffset);
+    return (uint16_t)len;
+}
+
+void ftp_StorCallback(void *arg, int result) {
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        app.busy = false;
+        return;
+    }
+
+    *strrchr(app.path, '/') = '\0';
     util_GetRemoteFiles((lwftp_session_t *)arg);
 }

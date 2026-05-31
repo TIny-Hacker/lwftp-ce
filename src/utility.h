@@ -92,6 +92,22 @@ void util_DeleteFile(lwftp_session_t *s);
  */
 void util_MoveFile(lwftp_session_t *s);
 
+/**
+ * @brief Upload the currently selected file to the server.
+ * 
+ * @param s lwftp session.
+ */
+void util_UploadFile(lwftp_session_t *s);
+
+/**
+ * @brief Computer the checksum for a TI program or AppVar file.
+ * 
+ * @param data Start of data buffer.
+ * @param size Size of data buffer.
+ * @return uint16_t Checksum value.
+ */
+uint16_t util_ComputeChecksum(uint8_t *data, unsigned int size);
+
 #ifdef __cplusplus
 }
 #endif
