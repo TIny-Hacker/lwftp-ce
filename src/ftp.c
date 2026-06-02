@@ -7,6 +7,7 @@
 #include <fileioc.h>
 #include <keypadc.h>
 #include <string.h>
+#include <graphx.h>
 
 static void ftp_AddRemoteFile(void) {
     char *name = strchr(app.rxBuf, ' ');
@@ -271,33 +272,35 @@ void ftp_RetrCallback(void *arg, int result) {
         return;
     }
 
-    // char name[9];
-    // memset(name, 0, 9);
-    // uint8_t *buf = FILE_BUFFER;
-    // buf += 53;
-    // uint16_t dataSize = *(uint16_t *)buf;
-    // buf += 2;
-    // uint16_t checksum = util_ComputeChecksum(buf, dataSize);
-    // buf += 4;
-    // uint8_t type = *(buf++);
-    // memcpy(name, buf, 8);
-    // buf += 9;
-    // bool archived = (*(buf++) == 0x80) ? true : false;
-    // uint16_t size = *(uint16_t *)buf;
-    // buf += 2;
+    char name[9];
+    memset(name, 0, 9);
+    uint8_t *buf = FILE_BUFFER;
+    buf += 53;
+    uint16_t dataSize = *(uint16_t *)buf;
+    buf += 2;
+    uint16_t checksum = util_ComputeChecksum(buf, dataSize - 2);
+    buf += 4;
+    uint8_t type = *(buf++);
+    memcpy(name, buf, 8);
+    buf += 9;
+    bool archived = (*(buf++) == 0x80) ? true : false;
+    uint16_t size = *(uint16_t *)buf;
+    buf += 2;
 
-    // if (checksum != *(uint16_t *)(buf + size)) {
-    //     menu_PrintMessage("Invalid checksum");
-    //     while (!kb_AnyKey()) {
-    //         util_ServiceNetwork();
-    //     }
-    //     return;
-    // }
+    if (checksum != *(uint16_t *)(buf + size)) {
+        menu_PrintMessage("Invalid checksum");
 
-    // uint8_t slot = ti_OpenVar(name, "w", type);
-    // ti_Write(buf + 2, sizeof(uint8_t), size - 2, slot);
-    // ti_SetArchiveStatus(archived, slot);
-    // ti_Close(slot);
+        while (!kb_AnyKey()) {
+            util_ServiceNetwork();
+        }
 
-    // util_GetLocalFiles();
+        return;
+    }
+
+    uint8_t slot = ti_OpenVar(name, "w", type);
+    ti_Write(buf + 2, sizeof(uint8_t), size - 2, slot);
+    ti_SetArchiveStatus(archived, slot);
+    ti_Close(slot);
+
+    util_GetLocalFiles();
 }

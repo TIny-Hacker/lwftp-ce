@@ -43,7 +43,7 @@ static bool g_eth_rx_drain_scheduled = false;
 #define ETH_RX_RING_INIT_SIZE 512u
 #define ETH_RX_RING_MAX_SIZE 2048u
 #define ETH_RX_RING_STEP_SIZE 512u
-#define ETH_RX_DRAIN_INTERVAL_MS 10u
+#define ETH_RX_DRAIN_INTERVAL_MS 5u
 #define ETH_RX_DRAIN_MAX_NONE 8u
 #define ETH_RX_DRAIN_MAX_MILD 4u
 #define ETH_RX_DRAIN_MAX_HIGH 2u
@@ -189,8 +189,9 @@ static void eth_register_pressure_hook(void)
 
 void eth_set_rx_throttle(enum mem_pressure_level level)
 {
+    enum mem_pressure_level previous = g_eth_rx_throttle_level;
     g_eth_rx_throttle_level = level;
-    if (eth_should_schedule_rx())
+    if (eth_should_schedule_rx() || previous == MEM_PRESSURE_CRITICAL)
     {
         struct netif *netif = NULL;
         NETIF_FOREACH(netif)
@@ -205,8 +206,9 @@ void eth_set_rx_throttle(enum mem_pressure_level level)
                 continue;
             }
             size_t len = (dev->type == USB_NCM_SUBCLASS) ? NCM_RX_NTB_MAX_SIZE : ETHERNET_MTU;
-            usb_fn.schedule_transfer(dev->rx.endpoint, dev->rx.buf, len, dev->rx.callback, dev);
-            dev->rx_transfer_active = true;
+            if (!usb_fn.schedule_transfer(dev->rx.endpoint, dev->rx.buf, len, dev->rx.callback, dev)) {
+                dev->rx_transfer_active = true;
+            }
         }
     }
 }
@@ -598,11 +600,11 @@ err_t ncm_bulk_transmit(struct netif *netif, struct pbuf *p)
         return ERR_MEM;
 
     // allocate TX packet buffer
-    struct pbuf *obuf = pbuf_alloc(PBUF_RAW, ETHERNET_MTU + NCM_HBUF_SIZE, PBUF_RAM);
+    struct pbuf *obuf = pbuf_alloc(PBUF_RAW, NCM_HBUF_SIZE + p->tot_len, PBUF_RAM);
     if (obuf == NULL)
         return ERR_MEM;
 
-    memset(obuf->payload, 0, ETHERNET_MTU + NCM_HBUF_SIZE);
+    memset(obuf->payload, 0, NCM_HBUF_SIZE + p->tot_len);
 
     // declare NTH, NDP, and NDP_IDX structures
     uint8_t hdr_buf[NCM_HBUF_SIZE] = {0};
@@ -613,7 +615,7 @@ err_t ncm_bulk_transmit(struct netif *netif, struct pbuf *p)
     nth->dwSignature = NCM_NTH_SIG;
     nth->wHeaderLength = NCM_NTH_LEN;
     nth->wSequence = dev->class.ncm.sequence++;
-    nth->wBlockLength = NCM_HBUF_SIZE + ETHERNET_MTU;
+    nth->wBlockLength = NCM_HBUF_SIZE + p->tot_len;
     nth->wNdpIndex = offset_ndp;
 
     ndp->dwSignature = NCM_NDP_SIG0;
@@ -636,7 +638,7 @@ err_t ncm_bulk_transmit(struct netif *netif, struct pbuf *p)
 
     // queue the TX
     // printf("sent packet %u at time %lu\n", sequence, sys_now());
-    usb_fn.schedule_transfer(dev->tx.endpoint, obuf->payload, ETHERNET_MTU + NCM_HBUF_SIZE, bulk_transmit_callback, obuf);
+    usb_fn.schedule_transfer(dev->tx.endpoint, obuf->payload, NCM_HBUF_SIZE + p->tot_len, bulk_transmit_callback, obuf);
     return ERR_OK;
 }
 

@@ -308,12 +308,9 @@ void util_DownloadFile(lwftp_session_t *s) {
         util_ServiceNetwork();
     }
 
-    uint8_t slot = ti_OpenVar("Dump", "w", OS_TYPE_APPVAR);
-    ti_Write(FILE_BUFFER, sizeof(uint8_t), 63000, slot);
-    ti_Close(slot);
-
     *strrchr(app.path, '/') = '\0';
     app.dirty = ALL_DIRTY;
+    s->done_fn = NULL;
 }
 
 uint16_t util_ComputeChecksum(uint8_t *data, unsigned int size) {
