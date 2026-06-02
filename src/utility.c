@@ -249,19 +249,18 @@ void util_UploadFile(lwftp_session_t *s) {
     buf += 2;
     *(uint16_t *)buf = size + 2;
     buf += 2;
-    *(uint8_t *)buf = type;
-    buf++;
+    *(uint8_t *)(buf++) = type;
     memcpy(buf, LOCAL_FILES[app.selected[0]].name, 8);
     buf += 9; // Name + version byte
     if (ti_IsArchived(slot)) {
-        *(uint8_t *)buf = 0x80;
+        *(uint8_t *)(buf++) = 0x80;
     }
-    buf++;
     *(uint16_t *)buf = size + 2;
     buf += 2;
     memcpy(buf, ti_GetDataPtr(slot) - 2, 2 + size); // variable entry + data
     ti_Close(slot);
     *(uint16_t *)(buf + 2 + size) = util_ComputeChecksum(FILE_BUFFER + 11 + 42 + 2, 17 + size);
+
     app.txSize = 11 + 42 + 2 + 17 + size + 4; // Header + comment + size + variable entry + data + checksum
     app.txOffset = 0;
     app.busy = true;
@@ -280,15 +279,41 @@ void util_UploadFile(lwftp_session_t *s) {
 }
 
 void util_DownloadFile(lwftp_session_t *s) {
+    if (!app.remoteColumn) {
+        return;
+    }
+
     menu_PrintMessage("Downloading file...");
-    gfx_BlitBuffer();
+
+    char *insert = app.path + strlen(app.path);
+    *insert = '/';
+    memcpy(insert + 1, REMOTE_FILES[app.selected[1]].name, 9);
+    insert = app.path + strlen(app.path);
+    strcpy(insert, ".8x");
+    *(insert + 3) = (REMOTE_FILES[app.selected[1]].type == TYPE_APPVAR) ? 'v' : 'p';
+    *(insert + 4) = '\0';
+    s->remote_path = app.path;
+
+    memset(FILE_BUFFER, 0, 65535);
+    app.rxOffset = 0;
+    app.busy = true;
+
+    s->data_sink = ftp_RetrDataSink;
+    s->done_fn = ftp_RetrCallback;
+
+    lwftp_retrieve(s);
 
     while (app.busy && !kb_IsDown(kb_KeyClear)) {
         kb_Scan();
         util_ServiceNetwork();
     }
 
-    gfx_BlitScreen();
+    uint8_t slot = ti_OpenVar("Dump", "w", OS_TYPE_APPVAR);
+    ti_Write(FILE_BUFFER, sizeof(uint8_t), 63000, slot);
+    ti_Close(slot);
+
+    *strrchr(app.path, '/') = '\0';
+    app.dirty = ALL_DIRTY;
 }
 
 uint16_t util_ComputeChecksum(uint8_t *data, unsigned int size) {

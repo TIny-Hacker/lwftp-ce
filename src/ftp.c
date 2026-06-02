@@ -4,6 +4,8 @@
 #include "menu.h"
 #include "utility.h"
 
+#include <fileioc.h>
+#include <keypadc.h>
 #include <string.h>
 
 static void ftp_AddRemoteFile(void) {
@@ -227,12 +229,75 @@ void ftp_StorCallback(void *arg, int result) {
         return;
     }
 
+    *strrchr(app.path, '/') = '\0';
+
     if (result != LWFTP_RESULT_OK) {
         app.ftpResult = result;
         app.busy = false;
         return;
     }
 
-    *strrchr(app.path, '/') = '\0';
     util_GetRemoteFiles((lwftp_session_t *)arg);
+}
+
+uint16_t ftp_RetrDataSink(void *arg, const char *ptr, uint16_t len) {
+    (void)arg;
+
+    if (ptr == NULL) {
+        return 0;
+    }
+
+    if (app.rxOffset + len > 65535) {
+        len = 65535 - app.rxOffset;
+    }
+
+    memcpy(&(FILE_BUFFER[app.rxOffset]), ptr, len);
+    app.rxOffset += len;
+
+    return len;
+}
+
+void ftp_RetrCallback(void *arg, int result) {
+    (void)arg;
+
+    if (result == LWFTP_RESULT_INPROGRESS) {
+        return;
+    }
+
+    app.busy = false;
+
+    if (result != LWFTP_RESULT_OK) {
+        app.ftpResult = result;
+        return;
+    }
+
+    // char name[9];
+    // memset(name, 0, 9);
+    // uint8_t *buf = FILE_BUFFER;
+    // buf += 53;
+    // uint16_t dataSize = *(uint16_t *)buf;
+    // buf += 2;
+    // uint16_t checksum = util_ComputeChecksum(buf, dataSize);
+    // buf += 4;
+    // uint8_t type = *(buf++);
+    // memcpy(name, buf, 8);
+    // buf += 9;
+    // bool archived = (*(buf++) == 0x80) ? true : false;
+    // uint16_t size = *(uint16_t *)buf;
+    // buf += 2;
+
+    // if (checksum != *(uint16_t *)(buf + size)) {
+    //     menu_PrintMessage("Invalid checksum");
+    //     while (!kb_AnyKey()) {
+    //         util_ServiceNetwork();
+    //     }
+    //     return;
+    // }
+
+    // uint8_t slot = ti_OpenVar(name, "w", type);
+    // ti_Write(buf + 2, sizeof(uint8_t), size - 2, slot);
+    // ti_SetArchiveStatus(archived, slot);
+    // ti_Close(slot);
+
+    // util_GetLocalFiles();
 }

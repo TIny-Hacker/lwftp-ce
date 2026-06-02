@@ -100,6 +100,13 @@ void util_MoveFile(lwftp_session_t *s);
 void util_UploadFile(lwftp_session_t *s);
 
 /**
+ * @brief Download the currently selected file to the calculator.
+ * 
+ * @param s lwftp session.
+ */
+void util_DownloadFile(lwftp_session_t *s);
+
+/**
  * @brief Computer the checksum for a TI program or AppVar file.
  * 
  * @param data Start of data buffer.

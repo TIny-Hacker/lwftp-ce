@@ -245,10 +245,11 @@ int main(void) {
                     while (kb_AnyKey());
                 } else if (kb_IsDown(kb_KeyWindow)) {
                     util_UploadFile(&s);
-                    while (kb_AnyKey());
                 } else if (kb_IsDown(kb_KeyZoom)) {
                     util_DeleteFile(&s);
                     while (kb_AnyKey());
+                } else if (kb_IsDown(kb_KeyTrace)) {
+                    util_DownloadFile(&s);
                 } else if (kb_IsDown(kb_KeyGraph)) {
                     util_MoveFile(&s);
                     while (kb_AnyKey());

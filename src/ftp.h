@@ -27,6 +27,10 @@ uint16_t ftp_StorDataSource(void *arg, const char **pptr, uint16_t maxlen);
 
 void ftp_StorCallback(void *arg, int result);
 
+uint16_t ftp_RetrDataSink(void *arg, const char *ptr, uint16_t len);
+
+void ftp_RetrCallback(void *arg, int result);
+
 #ifdef __cplusplus
 }
 #endif
