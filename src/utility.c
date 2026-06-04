@@ -84,6 +84,7 @@ void util_GetLocalFiles(void) {
     void *vat = NULL;
     unsigned int i = 0;
     memset(LOCAL_FILES, 0, sizeof(struct file_t) * MAX_LOCAL_FILES);
+    util_SortVAT();
 
     while ((name = ti_DetectAny(&vat, NULL, &type))) {
         if (*name == '!' || *name == '#') {

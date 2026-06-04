@@ -115,6 +115,12 @@ void util_DownloadFile(lwftp_session_t *s);
  */
 uint16_t util_ComputeChecksum(uint8_t *data, unsigned int size);
 
+/**
+ * @brief Alphabetically sort the VAT.
+ * 
+ */
+void util_SortVAT(void);
+
 #ifdef __cplusplus
 }
 #endif
