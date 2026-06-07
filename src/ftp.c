@@ -278,7 +278,7 @@ void ftp_RetrCallback(void *arg, int result) {
     buf += 53;
     uint16_t dataSize = *(uint16_t *)buf;
     buf += 2;
-    uint16_t checksum = util_ComputeChecksum(buf, dataSize - 2);
+    uint16_t checksum = util_ComputeChecksum(buf, dataSize);
     buf += 4;
     uint8_t type = *(buf++);
     memcpy(name, buf, 8);
