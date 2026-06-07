@@ -13,7 +13,6 @@ lwFTP CE is a simple FTP client for the TI-84 Plus CE, based on [gezedo's lwFTP 
 3. Run **prgmAPPINST** from the programs menu (You will need to use the [arTIfiCE jailbreak](https://yvantt.github.io/arTIfiCE) if you are on an OS version 5.5 and above).
 4. lwFTP CE will be installed and can be found in the apps menu.
 
-
 ## Usage
 
 In order to use lwFTP CE, you will also need an FTP server to connect to. Many FTP server programs are available, though lwFTP CE relies on a server which supports RFC 3659 as it uses the MLSD command. You'll also need a USB -> Ethernet adapter. 
