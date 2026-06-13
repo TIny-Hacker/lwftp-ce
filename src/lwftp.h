@@ -33,8 +33,7 @@
 #ifndef LWFTP_H
 #define LWFTP_H
 
-#include "lwip/opt.h"
-#include "lwip/ip.h"
+#include <lwip/core.h>
 
 #ifdef __cplusplus
 extern "C" {

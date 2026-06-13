@@ -1,19 +1,9 @@
-# random osx filesystem nonsense
-.dccache
-
-# VS Code and XCode workspace files/directories
-.vscode
-*.xcworkspace   
-*.code-workspace
-
-# build and object directories
-obj
-bin
-
-# httpd server example filesystem includes
-*makefsdata.c.*
-*.fsdata
-.venv
-
-.claude
-lwIPSPKI.8xv
+obj/
+bin/
+.vscode/
+src/gfx/*.c
+src/gfx/*.h
+.DS_Store
+convimg.out
+nul.d
+src/gfx/convimg.yaml.lst

@@ -28,13 +28,6 @@ int8_t menu_StringInput(unsigned int x, uint8_t y, unsigned int width, char *inp
 void menu_PrintMessage(char *message);
 
 /**
- * @brief Show client info configuration menu.
- * 
- * @return int8_t 0 if success.
- */
-int8_t menu_ClientConfig(void);
-
-/**
  * @brief Show server info configuration menu.
  * 
  * @param server Server address.

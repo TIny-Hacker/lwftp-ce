@@ -45,9 +45,6 @@ struct preferences_t {
     uint8_t fgColor;
     uint8_t hlColor;
     uint8_t textColor;
-    uint8_t client[4];
-    uint8_t mask[4];
-    uint8_t gw[4];
 };
 
 struct app_t {

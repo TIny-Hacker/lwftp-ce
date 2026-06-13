@@ -9,6 +9,8 @@
 #include <string.h>
 #include <graphx.h>
 
+#include <lwip/conn.h>
+
 static void ftp_AddRemoteFile(void) {
     char *name = strchr(app.rxBuf, ' ');
     char *type = strstr(app.rxBuf, "type=");
@@ -291,7 +293,7 @@ void ftp_RetrCallback(void *arg, int result) {
         menu_PrintMessage("Invalid checksum");
 
         while (!kb_AnyKey()) {
-            util_ServiceNetwork();
+            lwip_poll_network_events();
         }
 
         return;

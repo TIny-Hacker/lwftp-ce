@@ -11,18 +11,14 @@
 #include <time.h>
 #include <usbdrvce.h>
 
-#include "lwip/timeouts.h"
-
-void util_ServiceNetwork(void) {
-    usb_HandleEvents();
-    sys_check_timeouts();
-}
+#include <lwip/core.h>
+#include <lwip/conn.h>
 
 void util_WaitBeforeKeypress(clock_t *clockOffset, bool *keyPressed) {
     if (!(*keyPressed)) {
         while ((clock() - *clockOffset < CLOCKS_PER_SEC / 2.25) && kb_AnyKey()) {
             if (app.connected) {
-                util_ServiceNetwork();
+                lwip_poll_network_events();
             }
 
             kb_Scan();
@@ -273,7 +269,7 @@ void util_UploadFile(lwftp_session_t *s) {
 
     while (app.busy && !kb_IsDown(kb_KeyClear)) {
         kb_Scan();
-        util_ServiceNetwork();
+        lwip_poll_network_events();
     }
 
     app.dirty = ALL_DIRTY;
@@ -306,7 +302,7 @@ void util_DownloadFile(lwftp_session_t *s) {
 
     while (app.busy && !kb_IsDown(kb_KeyClear)) {
         kb_Scan();
-        util_ServiceNetwork();
+        lwip_poll_network_events();
     }
 
     *strrchr(app.path, '/') = '\0';

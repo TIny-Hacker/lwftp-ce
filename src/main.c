@@ -10,15 +10,10 @@
 
 #include <graphx.h>
 #include <keypadc.h>
-#include <usbdrvce.h>
-
-#include "drivers/mem.h"
-#include "drivers/usb_ethernet.h"
 #include "lwftp.h"
-#include "lwip/init.h"
-#include "lwip/ip4_addr.h"
-#include "lwip/netif.h"
-#include "lwip/timeouts.h"
+
+#include <lwip/core.h>
+#include <lwip/conn.h>
 
 struct app_t app = {
     .dirty = ALL_DIRTY,
@@ -38,12 +33,11 @@ struct preferences_t prefs = {
     .fgColor = 148,
     .hlColor = 222,
     .textColor = 0,
-    .client = {0, 0, 0, 0},
-    .mask = {0, 0, 0, 0},
-    .gw = {0, 0, 0, 0},
 };
 
-static void delay(unsigned int ms) {
+static bool lwipStarted = false;
+
+static void main_Delay(unsigned int ms) {
     // Simple busy loop delay (approximate, based on ~15 MHz CPU)
     for (unsigned int i = 0; i < ms; i++) {
         for (volatile unsigned int j = 0; j < 1500; j++) {
@@ -52,71 +46,41 @@ static void delay(unsigned int ms) {
     }
 }
 
-static bool main_WaitForIP(void) {
-    for (unsigned int tick = 0; tick < IP_WAIT_TICKS; tick++) {
-        util_ServiceNetwork();
-        kb_Scan();
-
-        if (netif_default) {
-            ip4_addr_t ip, gw, mask;
-
-            IP4_ADDR(&ip, prefs.client[0], prefs.client[1], prefs.client[2], prefs.client[3]);
-            IP4_ADDR(&mask, prefs.mask[0], prefs.mask[1], prefs.mask[2], prefs.mask[3]);
-            IP4_ADDR(&gw, prefs.gw[0], prefs.gw[1], prefs.gw[2], prefs.gw[3]);
-            netif_set_addr(netif_default, &ip, &mask, &gw);
-            return !ip4_addr_isany(netif_ip4_addr(netif_default));
-        }
-
-        if (kb_IsDown(kb_KeyClear)) {
-            return false;
-        }
-
-        delay(10);
-    }
-
-    return false;
-}
-
 static bool main_StartLwIP(void) {
-    if (!mem_init(LWIP_MAX_HEAP, malloc, free, realloc)) {
-        menu_PrintMessage("mem_init failed");
+    if (!lwip_init_runtime()) {
+        switch (lwip_runtime_last_error()) {
+            case 1:
+                menu_PrintMessage("lwIP app missing");
+                break;
+            case 2:
+                menu_PrintMessage("lwIP runtime table");
+                break;
+            case 3:
+                menu_PrintMessage("lwIP runtime count");
+                break;
+            default:
+                menu_PrintMessage("lwIP runtime init");
+                break;
+        }
         return false;
     }
 
-    struct lwip_configurator conf = {0};
-    conf.version = LWIP_CONFIGURATOR_V1;
-    conf.usb_conf.reset_device = usb_ResetDevice;
-    conf.usb_conf.disable_device = usb_DisableDevice;
-    conf.usb_conf.ref_device = usb_RefDevice;
-    conf.usb_conf.unref_device = usb_UnrefDevice;
-    conf.usb_conf.set_device_data = usb_SetDeviceData;
-    conf.usb_conf.get_device_data = usb_GetDeviceData;
-    conf.usb_conf.get_role = usb_GetRole;
-    conf.usb_conf.get_device_flags = usb_GetDeviceFlags;
-    conf.usb_conf.schedule_transfer = usb_ScheduleTransfer;
-    conf.usb_conf.control_transfer = usb_ControlTransfer;
-    conf.usb_conf.get_config_descriptor_len = usb_GetConfigurationDescriptorTotalLength;
-    conf.usb_conf.get_descriptor = usb_GetDescriptor;
-    conf.usb_conf.get_string_descriptor = usb_GetStringDescriptor;
-    conf.usb_conf.set_configuration = usb_SetConfiguration;
-    conf.usb_conf.set_interface = usb_SetInterface;
-    conf.usb_conf.get_device_endpoint = usb_GetDeviceEndpoint;
-    conf.usb_conf.set_endpoint_data = usb_SetEndpointData;
-    conf.usb_conf.get_endpoint_data = usb_GetEndpointData;
-    conf.usb_conf.set_endpoint_flags = usb_SetEndpointFlags;
-    conf.malloc_conf.caller_malloc = malloc;
-    conf.malloc_conf.caller_free = free;
-
-    if (lwip_init(&conf) != ERR_OK) {
-        menu_PrintMessage("lwip_init failed");
+    if (!lwip_start()) {
+        switch (lwip_start_last_error()) {
+            case 1:
+                menu_PrintMessage("lwIP start init");
+                break;
+            case 2:
+                menu_PrintMessage("lwIP start usb");
+                break;
+            default:
+                menu_PrintMessage("lwIP start failed");
+                break;
+        }
         return false;
     }
 
-    if (usb_Init(eth_usb_event_callback, NULL, NULL, USB_DEFAULT_INIT_FLAGS)) {
-        menu_PrintMessage("usb_Init failed");
-        return false;
-    }
-
+    lwipStarted = true;
     return true;
 }
 
@@ -136,9 +100,6 @@ int main(void) {
     util_GetLocalFiles();
     while (kb_AnyKey()); // Debounce
 
-    if (menu_ClientConfig()) goto exit;
-    while (kb_AnyKey());
-
     if (menu_ServerConfig(server, user, pass)) goto exit;
     while (kb_AnyKey());
 
@@ -149,12 +110,6 @@ int main(void) {
     }
 
     menu_PrintMessage("Waiting for network...");
-
-    if (!main_WaitForIP()) {
-        usb_Cleanup();
-        menu_PrintMessage("Bad client IP");
-        goto exit;
-    }
 
     app.connected = true;
 
@@ -175,7 +130,7 @@ int main(void) {
     }
 
     while (!app.ftpStarted && app.ftpResult == LWFTP_RESULT_INPROGRESS) {
-        util_ServiceNetwork();
+        lwip_poll_network_events();
     }
 
     if (!app.ftpStarted) {
@@ -183,7 +138,7 @@ int main(void) {
     }
 
     while (!kb_IsDown(kb_KeyClear)) {
-        util_ServiceNetwork();
+        lwip_poll_network_events();
         kb_Scan();
 
         if (app.dirty) {
@@ -265,14 +220,16 @@ int main(void) {
     clockOffset = clock();
 
     while (s.control_state != LWFTP_CLOSED && clock() - clockOffset < CLOCKS_PER_SEC) {
-        util_ServiceNetwork();
-        delay(2);
+        lwip_poll_network_events();
+        main_Delay(2);
     }
 
 exit:
     gfx_End();
     util_WriteConfig();
-    usb_Cleanup();
+    if (lwipStarted) {
+        lwip_stop();
+    }
 
     return app.ftpResult;
 }

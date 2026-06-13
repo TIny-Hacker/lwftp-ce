@@ -8,3 +8,5 @@
 .gitattributes          export-ignore
 .github                 export-ignore
 .vscode                 export-ignore
+
+*.inc linguist-vendored
